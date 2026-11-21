@@ -1,0 +1,36 @@
+name: Verify LifeBoard
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build-and-self-test:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci --prefix mobile
+      - name: Core self-test
+        run: swift run --disable-sandbox LifeBoardSelfTest
+      - name: Release build
+        run: swift build --disable-sandbox -c release
+      - name: Integrated audit safety and native wire checks
+        run: scripts/test-audit.sh
+  mobile-test-and-build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - run: npm ci
+      - run: npm test
+      - run: npm run build

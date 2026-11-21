@@ -1,0 +1,11 @@
+.DS_Store
+.build/
+dist/
+*.xcuserstate
+xcuserdata/
+__pycache__/
+mobile/node_modules/
+mobile/public/
+output/playwright/
+output/deployment/
+.playwright-cli/

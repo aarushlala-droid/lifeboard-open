@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+<key>CFBundleName</key><string>LifeBoard</string>
+<key>CFBundleDisplayName</key><string>LifeBoard</string>
+<key>CFBundleIdentifier</key><string>app.lifeboard.mac</string>
+<key>CFBundleExecutable</key><string>LifeBoard</string>
+<key>CFBundlePackageType</key><string>APPL</string>
+    <key>CFBundleShortVersionString</key><string>4.1</string>
+    <key>CFBundleVersion</key><string>17</string>
+<key>LSMinimumSystemVersion</key><string>14.0</string>
+    <key>NSHighResolutionCapable</key><true/>
+    <key>NSCalendarsFullAccessUsageDescription</key><string>LifeBoard shows the connected Google, iCloud and Microsoft Exchange calendars you select alongside your optional task schedule.</string>
+<key>CFBundleIconFile</key><string>AppIcon.icns</string>
+<key>CFBundleURLTypes</key><array><dict><key>CFBundleURLName</key><string>LifeBoard Import</string><key>CFBundleURLSchemes</key><array><string>lifeboard</string></array></dict></array>
+</dict></plist>

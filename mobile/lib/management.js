@@ -1,0 +1,3 @@
+import { authorise,sameOrigin } from './auth.js';
+import { databaseStore } from './store.js';
+export function managedHandler(action,storeFactory=databaseStore,env=process.env){return async function(request,response){response.setHeader('Cache-Control','no-store');if(!sameOrigin(request))return response.status(403).json({error:'This request must come from LifeBoard.'});try{const store=storeFactory(env),identity=await authorise(request,store,env);if(!identity)return response.status(401).json({error:'Connect this device first.'});return await action(request,response,store,identity);}catch{return response.status(503).json({error:'Device management is temporarily unavailable.'});}};}

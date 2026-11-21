@@ -1,0 +1,56 @@
+// Disposable localhost browser verification; no production credentials/profile.
+import assert from 'node:assert/strict';
+import { mkdir,writeFile } from 'node:fs/promises';
+import { pathToFileURL } from 'node:url';
+import { spawn } from 'node:child_process';
+const modulePath=process.env.LIFEBOARD_PLAYWRIGHT_MODULE;
+if(!modulePath)throw Error('Set LIFEBOARD_PLAYWRIGHT_MODULE to the installed Playwright index.mjs');
+const {chromium}=await import(pathToFileURL(modulePath));
+const base=process.env.LIFEBOARD_UI_BASE||'http://127.0.0.1:4174';
+let server;
+if(!process.env.LIFEBOARD_UI_BASE){server=spawn(process.execPath,[new URL('./preview-server.mjs',import.meta.url).pathname],{env:{...process.env,PORT:'4174'},stdio:['ignore','pipe','pipe']});await new Promise((resolve,reject)=>{server.stdout.once('data',resolve);server.once('error',reject);server.once('exit',code=>reject(Error('Preview server exited '+code)));});}
+if(new URL(base).hostname!=='127.0.0.1')throw Error('This test requires the disposable localhost server');
+const out=new URL('../../output/playwright/',import.meta.url).pathname;await mkdir(out,{recursive:true});
+const browser=await chromium.launch({channel:'chrome',headless:true});
+const context=await browser.newContext({viewport:{width:390,height:844}});const page=await context.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));
+const passes=[];const pass=x=>{passes.push(x);console.log('PASS '+x);};
+async function synced(){await page.getByRole('status').filter({hasText:/Synced just now/}).waitFor();}
+async function openView(view){await page.goto(base+'/#view='+view);await synced();await page.getByRole('heading',{name:view==='todo'?'To Do':view==='sync-centre'?'Sync Centre':view[0].toUpperCase()+view.slice(1),exact:true}).waitFor();}
+try{
+ await openView('today');await page.getByRole('button',{name:'Add To Do',exact:true}).click();
+ await page.getByLabel('Title',{exact:true}).fill('UI audit task');await page.getByLabel('Notes',{exact:true}).fill('Before offline edit');
+ await page.getByLabel('Planned date').fill('2026-10-05');await page.getByLabel('Time',{exact:true}).fill('19:15');await page.getByLabel('Minutes',{exact:true}).fill('30');await page.getByRole('button',{name:'Save',exact:true}).click();await synced();
+ let remote=await (await fetch(base+'/api/snapshot')).json();let task=remote.data.tasks.find(t=>t.title==='UI audit task');assert.equal(task.scheduledStartMinutes,1155);pass('Minute-accurate task saved through UI and real preview API');
+ await page.goto(base+'/#view=calendar&day=2026-10-05');await synced();await page.getByRole('button',{name:/UI audit task/}).click();await page.getByLabel('Title',{exact:true}).fill('UI audited calendar edit');await page.getByRole('button',{name:'Save',exact:true}).click();await synced();pass('Scheduled calendar block opens editor and persists');
+ await context.setOffline(true);await page.goto(base+'/#view=calendar&day=2026-10-05');await page.getByRole('heading',{name:'Calendar',exact:true}).waitFor();await page.getByRole('button',{name:/UI audited calendar edit/}).click();await page.getByLabel('Notes',{exact:true}).fill('Durable offline note');await page.getByRole('button',{name:'Save',exact:true}).click();
+ await page.waitForFunction(async()=>{const r=indexedDB.open('lifeboard-private-v2',1);const db=await new Promise((resolve,reject)=>{r.onsuccess=()=>resolve(r.result);r.onerror=reject;});return new Promise(resolve=>{const tx=db.transaction('state'),r=tx.objectStore('state').get('workspace:preview-workspace');r.onsuccess=()=>resolve(r.result?.data?.tasks?.some(t=>t.notes==='Durable offline note'));});});
+ await page.reload();await page.getByRole('button',{name:/UI audited calendar edit/}).click();assert.equal(await page.getByLabel('Notes',{exact:true}).inputValue(),'Durable offline note');await page.getByRole('button',{name:'Cancel',exact:true}).click();pass('Real IndexedDB offline edit survives browser reload');
+ await context.setOffline(false);await synced();await openView('todo');await page.getByRole('tab',{name:/Tomorrow/}).click();await page.getByRole('button',{name:'More options for UI audited calendar edit'}).click();await page.getByRole('button',{name:/Delete To Do/}).click();await synced();await openView('trash');await page.getByRole('button',{name:'Restore',exact:true}).click();await synced();await openView('todo');await page.getByRole('tab',{name:/Tomorrow/}).click();await page.getByRole('button',{name:'Complete UI audited calendar edit',exact:true}).click();await synced();await openView('completed');await page.locator('.context-row').filter({hasText:'UI audited calendar edit'}).getByRole('button',{name:'Restore'}).click();await synced();pass('Trash and Completed UI restore saved work');
+ await openView('projects');await page.getByRole('button',{name:/Show all.*tasks/}).click();assert.match(page.url(),/view=context/);assert.equal(await page.getByRole('button',{name:'More',exact:true}).getAttribute('aria-current'),'page');await page.reload();await synced();assert.match(page.url(),/view=context/);pass('Project drilldown and More route survive reload');
+ for(const width of [320,390,768]){await page.setViewportSize({width,height:844});await page.emulateMedia({colorScheme:width===390?'dark':'light',reducedMotion:'reduce',contrast:'more'});await openView('todo');await page.getByRole('tab',{name:/Anytime/}).click();const size=await page.evaluate(()=>({width:innerWidth,scroll:document.documentElement.scrollWidth,small:[...document.querySelectorAll('.task-check,.row-more')].filter(x=>{const r=x.getBoundingClientRect();return r.width<44||r.height<44;}).length}));assert.ok(size.scroll<=size.width);assert.equal(size.small,0);await page.screenshot({path:out+`mobile-${width}.png`,fullPage:true});}pass('320/390/768 layouts, contrast/dark/reduced motion, primary 44px targets');
+ for(const width of [320,390,768,820,959,960,1024,1180,1366]){
+  await page.setViewportSize({width,height:1000});await page.emulateMedia({colorScheme:'light',reducedMotion:'reduce',contrast:'no-preference'});
+  for(const view of ['today','calendar','capture']){
+   await openView(view);assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),`${view} overflow at ${width}`);
+   if(view==='today'){
+    const fit=await page.evaluate(()=>({width:innerWidth,nav:document.querySelector('.tabbar').getBoundingClientRect().right,content:document.querySelector('main').getBoundingClientRect().left,columns:getComputedStyle(document.querySelector('main')).gridTemplateColumns.split(' ').length}));
+    if(width>=960){assert.ok(fit.nav<=fit.content);assert.equal(fit.columns,width<1180?1:2);}
+    await page.evaluate(()=>window.scrollTo(0,0));assert.ok(await page.locator('.brand').evaluate(el=>{const r=el.getBoundingClientRect();return Boolean(document.elementFromPoint(r.x+r.width/2,r.y+r.height/2)?.closest('.brand'));}));
+    if([820,960,1366].includes(width))await page.screenshot({path:out+`responsive-today-${width}.png`,fullPage:false});
+   }
+  }
+  await page.goto(base+'/#view=calendar&day=2026-10-05');await synced();
+  const gutter=await page.locator('.schedule-time').first().evaluate(el=>({width:el.clientWidth,required:el.scrollWidth,whiteSpace:getComputedStyle(el).whiteSpace}));assert.equal(gutter.whiteSpace,'nowrap');assert.ok(gutter.required<=gutter.width,`Calendar time gutter clipped at ${width}`);
+  await page.getByRole('button',{name:/UI audited calendar edit/}).click();
+  assert.ok(await page.locator('.sheet').evaluate(el=>el.scrollWidth<=el.clientWidth),`Task editor overflow at ${width}`);
+  assert.ok(await page.locator('.sheet .field input,.sheet .field select,.sheet .field textarea').evaluateAll(els=>els.every(el=>{const r=el.getBoundingClientRect(),parent=el.closest('.sheet').getBoundingClientRect();return r.left>=parent.left&&r.right<=parent.right;})),`Task editor fields clipped at ${width}`);
+  if([768,1024].includes(width))await page.screenshot({path:out+`responsive-editor-${width}.png`,fullPage:false});
+  await page.getByRole('button',{name:'Cancel',exact:true}).click();
+ }
+ pass('320/390/768/820/959/960/1024/1180/1366 Today, Calendar, Capture and task editors fit; calendar time gutter stays readable');
+ await page.goto(base+'/connect.html');await page.getByRole('heading',{name:'Connect your phone'}).waitFor();await page.screenshot({path:out+'connect-desktop.png',fullPage:true});
+ await page.setViewportSize({width:390,height:844});await page.emulateMedia({colorScheme:'dark'});await page.screenshot({path:out+'connect-mobile-dark.png',fullPage:true});assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));pass('Branded connection page fits desktop and dark mobile layouts');
+ await openView('settings');assert.match(await page.locator('main').innerText(),/locked-phone.*not implemented|not implemented.*locked-phone/);pass('Phone settings accurately describes notification limits');
+ await openView('todo');await page.getByRole('tab',{name:/Anytime/}).click();await page.evaluate(()=>{const original=IDBObjectStore.prototype.put;window.auditOriginalPut=original;IDBObjectStore.prototype.put=function(){throw new DOMException('Audit quota','QuotaExceededError');};});await page.getByRole('button',{name:/Revision task 1.*30 min/}).click();await page.getByLabel('Notes',{exact:true}).fill('Pending quota recovery');await page.getByRole('button',{name:'Save',exact:true}).click();await page.getByRole('status').filter({hasText:/export pending work/}).waitFor();const durable=await page.evaluate(async()=>{const r=indexedDB.open('lifeboard-private-v2',1),db=await new Promise(resolve=>r.onsuccess=()=>resolve(r.result));return new Promise(resolve=>{const q=db.transaction('state').objectStore('state').get('workspace:preview-workspace');q.onsuccess=()=>resolve(q.result.data.tasks.find(t=>t.title==='Revision task 1').notes);});});assert.notEqual(durable,'Pending quota recovery');await page.getByRole('button',{name:'More',exact:true}).click();await page.getByRole('button',{name:/Settings/}).click();await page.getByRole('button',{name:'Open Sync Centre',exact:true}).click();await page.getByRole('heading',{name:'Sync Centre',exact:true}).waitFor();assert.match(await page.locator('main').innerText(),/Not yet saved on this device/);pass('Actual IndexedDB quota simulation retains prior durable record and exposes recovery');
+ assert.deepEqual(errors,[]);await writeFile(out+'ui-verification.json',JSON.stringify({passes,errors},null,2));
+}catch(error){await page.screenshot({path:out+"failure.png",fullPage:true});await writeFile(out+"failure.txt",await page.locator("body").innerText());throw error;}finally{await context.close();await browser.close();server?.kill();}

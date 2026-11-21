@@ -1,0 +1,8 @@
+[
+ {"input":"read Geography chapter 2 on 6 October for 30 minutes","title":"Read Geography chapter 2","day":"2026-10-06","duration":30,"priority":"none","subject":"Geography","review":false},
+ {"input":"Revise Maths tomorrow medium priority for 45 mins","title":"Revise Maths","day":"2026-10-04","duration":45,"priority":"medium","subject":"Mathematics","review":false},
+ {"input":"Write essay on 31/02/2026 low priority for 20 minutes","title":"Write essay","day":null,"duration":20,"priority":"low","subject":null,"review":true},
+ {"input":"Read biochemical notes for 1 hour","title":"Read biochemical notes","day":null,"duration":60,"priority":"none","subject":null,"review":false},
+ {"input":"Practise Geography at 19:15 tomorrow high priority","title":"Practise Geography","day":"2026-10-04","duration":30,"priority":"high","subject":"Geography","review":false},
+ {"input":"Read on 29 February 2028 for 30 minutes","title":"Read","day":"2028-02-29","duration":30,"priority":"none","subject":null,"review":false}
+]

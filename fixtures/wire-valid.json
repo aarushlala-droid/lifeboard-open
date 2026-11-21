@@ -1,0 +1,304 @@
+{
+  "schemaVersion": 3,
+  "tasks": [
+    {
+      "id": "00000000-0000-4000-8000-000000000008",
+      "title": "Overnight revision",
+      "notes": "",
+      "createdAt": "2024-02-29T20:00:00.125Z",
+      "modifiedAt": "2024-02-29T20:00:00.125Z",
+      "isCompleted": false,
+      "isArchived": false,
+      "completionPercent": 0,
+      "estimatedMinutes": 120,
+      "actualMinutes": 525600,
+      "priority": "high",
+      "dueDay": {
+        "year": 2024,
+        "month": 3,
+        "day": 1
+      },
+      "scheduledDay": {
+        "year": 2024,
+        "month": 2,
+        "day": 29
+      },
+      "scheduledStartMinutes": 1380,
+      "scheduledDurationMinutes": 120,
+      "subjectID": "00000000-0000-4000-8000-000000000001",
+      "topicID": "00000000-0000-4000-8000-000000000002",
+      "projectID": "00000000-0000-4000-8000-000000000004",
+      "milestoneID": "00000000-0000-4000-8000-000000000005",
+      "tags": [
+        "synthetic"
+      ],
+      "sortOrder": -1000000000000.0,
+      "subtasks": [
+        {
+          "id": "00000000-0000-4000-8000-000000000009",
+          "title": "Read chapter",
+          "isCompleted": true
+        }
+      ],
+      "recurrence": {
+        "frequency": "monthly",
+        "interval": 365,
+        "nextDay": {
+          "year": 2024,
+          "month": 3,
+          "day": 1
+        }
+      },
+      "recurrenceSeriesID": "00000000-0000-4000-8000-00000000000a"
+    },
+    {
+      "id": "00000000-0000-4000-8000-00000000000b",
+      "title": "Archived synthetic task",
+      "notes": "",
+      "createdAt": "2024-02-29T20:00:00.125Z",
+      "modifiedAt": "2024-02-29T20:00:00.125Z",
+      "isCompleted": true,
+      "isArchived": true,
+      "completionPercent": 100,
+      "estimatedMinutes": 120,
+      "actualMinutes": 525600,
+      "priority": "high",
+      "dueDay": {
+        "year": 2024,
+        "month": 3,
+        "day": 1
+      },
+      "scheduledDay": {
+        "year": 2024,
+        "month": 2,
+        "day": 29
+      },
+      "scheduledStartMinutes": 1380,
+      "scheduledDurationMinutes": 120,
+      "subjectID": "00000000-0000-4000-8000-000000000001",
+      "topicID": "00000000-0000-4000-8000-000000000002",
+      "projectID": "00000000-0000-4000-8000-000000000004",
+      "milestoneID": "00000000-0000-4000-8000-000000000005",
+      "tags": [
+        "synthetic"
+      ],
+      "sortOrder": -1000000000000.0,
+      "subtasks": [],
+      "recurrence": {
+        "frequency": "monthly",
+        "interval": 365,
+        "nextDay": {
+          "year": 2024,
+          "month": 3,
+          "day": 1
+        }
+      },
+      "recurrenceSeriesID": "00000000-0000-4000-8000-00000000000a",
+      "archivedAt": "2024-02-29T20:00:00.125Z",
+      "completedAt": "2024-02-29T20:00:00.125Z"
+    }
+  ],
+  "events": [
+    {
+      "id": "00000000-0000-4000-8000-00000000000c",
+      "title": "Meeting",
+      "day": {
+        "year": 2024,
+        "month": 2,
+        "day": 29
+      },
+      "startMinutes": 0,
+      "endMinutes": 1440,
+      "notes": "",
+      "location": "Local",
+      "projectID": "00000000-0000-4000-8000-000000000004"
+    }
+  ],
+  "subjects": [
+    {
+      "id": "00000000-0000-4000-8000-000000000001",
+      "title": "Mathematics",
+      "confidence": 5,
+      "progress": 50,
+      "notes": "",
+      "colour": "blue",
+      "archived": false,
+      "lastActivity": "2024-02-29T20:00:00.125Z",
+      "topics": [
+        {
+          "id": "00000000-0000-4000-8000-000000000002",
+          "title": "Algebra",
+          "confidence": 0,
+          "progress": 100,
+          "notes": "Synthetic notes",
+          "lastActivity": "2024-02-29T20:00:00.125Z"
+        }
+      ],
+      "confidenceHistory": [
+        {
+          "id": "00000000-0000-4000-8000-000000000003",
+          "date": "2024-02-29T20:00:00.125Z",
+          "value": 0
+        }
+      ]
+    }
+  ],
+  "projects": [
+    {
+      "id": "00000000-0000-4000-8000-000000000004",
+      "title": "Research",
+      "status": "active",
+      "progress": 100,
+      "health": 0,
+      "summary": "Summary",
+      "notes": "Notes",
+      "startDay": {
+        "year": 2024,
+        "month": 2,
+        "day": 29
+      },
+      "targetDay": {
+        "year": 2024,
+        "month": 3,
+        "day": 1
+      },
+      "colour": "indigo",
+      "milestones": [
+        {
+          "id": "00000000-0000-4000-8000-000000000005",
+          "title": "Read sources",
+          "targetDay": {
+            "year": 2024,
+            "month": 3,
+            "day": 1
+          },
+          "isCompleted": false,
+          "notes": ""
+        }
+      ],
+      "updates": [
+        {
+          "id": "00000000-0000-4000-8000-000000000006",
+          "date": "2024-02-29T20:00:00.125Z",
+          "text": "Progress",
+          "confidenceChange": -5,
+          "progressChange": 100
+        }
+      ],
+      "progressHistory": [
+        {
+          "id": "00000000-0000-4000-8000-000000000007",
+          "date": "2024-02-29T20:00:00.125Z",
+          "value": 100
+        }
+      ],
+      "lastActivity": "2024-02-29T20:00:00.125Z",
+      "progressMode": "milestones"
+    }
+  ],
+  "yearMarkers": [
+    {
+      "id": "00000000-0000-4000-8000-00000000000d",
+      "title": "Test",
+      "startDay": {
+        "year": 2024,
+        "month": 2,
+        "day": 29
+      },
+      "endDay": {
+        "year": 2024,
+        "month": 3,
+        "day": 1
+      },
+      "category": "Test",
+      "notes": "",
+      "subjectID": "00000000-0000-4000-8000-000000000001",
+      "colour": "orange"
+    }
+  ],
+  "activity": [
+    {
+      "id": "00000000-0000-4000-8000-00000000000e",
+      "date": "2024-02-29T20:00:00.125Z",
+      "kind": "taskCompleted",
+      "title": "Completed synthetic task",
+      "subjectID": "00000000-0000-4000-8000-0000000001f4",
+      "topicID": "00000000-0000-4000-8000-0000000001f5",
+      "projectID": "00000000-0000-4000-8000-0000000001f6"
+    }
+  ],
+  "focusSessions": [
+    {
+      "id": "00000000-0000-4000-8000-00000000000f",
+      "kind": "focus",
+      "taskID": "00000000-0000-4000-8000-0000000001f7",
+      "taskTitle": "Historic removed task",
+      "subjectID": "00000000-0000-4000-8000-0000000001f4",
+      "projectID": "00000000-0000-4000-8000-0000000001f6",
+      "startedAt": "2024-02-29T10:00:00Z",
+      "endedAt": "2024-02-29T10:25:00Z",
+      "focusedSeconds": 1500,
+      "completedTimer": true
+    }
+  ],
+  "activeFocus": {
+    "id": "00000000-0000-4000-8000-000000000010",
+    "kind": "focus",
+    "taskID": "00000000-0000-4000-8000-000000000008",
+    "taskTitle": "Overnight revision",
+    "subjectID": "00000000-0000-4000-8000-000000000001",
+    "projectID": "00000000-0000-4000-8000-000000000004",
+    "plannedMinutes": 240,
+    "startedAt": "2024-02-29T20:00:00.125Z",
+    "pausedAt": "2024-02-29T20:01:00.500Z",
+    "pausedSeconds": 0.125
+  },
+  "externalEvents": [
+    {
+      "id": "source-CaseSensitive",
+      "calendarID": "calendar-source",
+      "calendarTitle": "Synthetic calendar",
+      "title": "All day",
+      "day": {
+        "year": 2024,
+        "month": 2,
+        "day": 29
+      },
+      "startMinutes": 0,
+      "endMinutes": 0,
+      "isAllDay": true,
+      "notes": "",
+      "location": "",
+      "startInstant": "2024-02-29T00:00:00Z",
+      "endInstant": "2024-03-01T00:00:00Z",
+      "timeZoneIdentifier": "Europe/London"
+    }
+  ],
+  "settings": {
+    "defaultTaskMinutes": 1440,
+    "eveningStartMinutes": 1380,
+    "eveningEndMinutes": 1440,
+    "maxFocusMinutes": 240,
+    "breakMinutes": 0,
+    "weekStartsMonday": true,
+    "academicYearStartMonth": 9,
+    "planningHours": [
+      {
+        "weekday": 1,
+        "startMinutes": 0,
+        "endMinutes": 1440
+      }
+    ],
+    "hasCompletedOnboarding": true,
+    "automaticICloudBackup": false,
+    "lastICloudBackup": "2024-02-29T20:00:00.125Z",
+    "notificationsScheduledItems": false,
+    "notificationsDeadlines": true,
+    "notificationsFocus": true,
+    "notificationLeadMinutes": 10080,
+    "selectedExternalCalendarIDs": [
+      "calendar-source"
+    ],
+    "lastExternalCalendarRefresh": "2024-02-29T20:00:00.125Z"
+  }
+}

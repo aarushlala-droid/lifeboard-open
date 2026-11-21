@@ -1,0 +1,5 @@
+LifeBoard keeps an editable local copy on your Mac. When mobile sync is connected, your LifeBoard records are sent over HTTPS to your private sync store. The mobile app keeps a cached copy on that device.
+
+Connected calendar access uses macOS Internet Accounts. Selected Google, iCloud and Microsoft Exchange calendar events are included in LifeBoard sync so your phone can show them. Automatic iCloud backups are separate and optional.
+
+LifeBoard has no analytics, ads, or tracking SDKs.

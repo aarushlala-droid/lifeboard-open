@@ -1,0 +1,7 @@
+# Synthetic performance harness
+
+Read-only source measurements; no live planner/session/storage/network/UI is used. Compile `main.swift` alongside the current integrated `Sources/LifeBoardCore/*.swift` with `swiftc -O` and the compatible SDK. Run `node mobile.mjs /absolute/path/to/integrated/repository`, or `Tests/Performance/run.sh /absolute/path/to/integrated/repository /absolute/path/to/results` to compile, run both engines and fail on a budget miss.
+
+100/1,000/5,000 nominal tasks plus 10% local events and 5% external events span past/current/future days with archived/completed records, arbitrary times and dense overlaps. Full-candidate planning intentionally stresses overflow, not just successful happy-path slots. Merge checks independent edits and an actual same-field conflict. Swift topic parsing checks existing-topic deduplication and all accepted counts.
+
+One warm-up and five measured samples; report min/median/p95 (with five samples p95 is maximum). Budgets are provisional desktop interaction targets, not historical regression thresholds: read/group/week-calendar 16/50/250ms; bulk planning/import 50/300/1500ms; document merge 50/250/1000ms. A budget miss is reported, not hidden. Benchmarks exclude fixture construction and assertion setup. Correctness checks and checksums prevent dead-code elimination. Browser rendering, mobile CPU, disk/network/persistence/energy and real local-model generation are outside this harness.
