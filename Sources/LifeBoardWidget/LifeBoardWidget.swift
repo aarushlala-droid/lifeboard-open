@@ -47,7 +47,7 @@ private struct LifeBoardWidgetView: View {
             }
             if !entry.hasLiveData {
                 Spacer()
-                Text("Open LifeBoard to refresh").font(.headline)
+                Text("Open \(LifeBoardEnvironment.productName) to refresh").font(.headline)
                 Text("Your To Dos will appear here.").font(.caption).foregroundStyle(.secondary)
                 Spacer()
             } else if let focusTitle = entry.snapshot.activeFocusTitle {
@@ -60,7 +60,7 @@ private struct LifeBoardWidgetView: View {
                 Spacer()
             } else {
                 ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
-                    Link(destination: URL(string: item.isTask ? "lifeboard://task/\(item.id.uuidString)" : "lifeboard://calendar")!) {
+                    Link(destination: URL(string: item.isTask ? "\(LifeBoardEnvironment.urlScheme)://task/\(item.id.uuidString)" : "\(LifeBoardEnvironment.urlScheme)://calendar")!) {
                         HStack(alignment: .firstTextBaseline, spacing: 8) {
                             Text(index == 0 ? timeRange(item) : shortTime(item.startMinutes)).font(.caption.monospacedDigit()).foregroundStyle(index == 0 ? Color.accentColor : .secondary).frame(width: family == .systemSmall ? 54 : 78, alignment: .leading)
                             Text(item.title).font(index == 0 ? .headline : .subheadline).lineLimit(1)
@@ -73,7 +73,7 @@ private struct LifeBoardWidgetView: View {
                     if !items.isEmpty { Divider() }
                     Text("TO DO").font(.caption2.weight(.bold)).foregroundStyle(.secondary)
                     ForEach(toDos) { task in
-                        Link(destination: URL(string: "lifeboard://task/\(task.id.uuidString)")!) {
+                        Link(destination: URL(string: "\(LifeBoardEnvironment.urlScheme)://task/\(task.id.uuidString)")!) {
                             HStack(spacing: 5) {
                                 Image(systemName: "circle").font(.caption2)
                                 Text(task.title).font(family == .systemSmall ? .subheadline : .callout).lineLimit(1)
@@ -89,7 +89,7 @@ private struct LifeBoardWidgetView: View {
             }
         }
         .containerBackground(.fill.tertiary, for: .widget)
-        .widgetURL(URL(string: "lifeboard://todo"))
+        .widgetURL(URL(string: "\(LifeBoardEnvironment.urlScheme)://todo"))
     }
 
     private func shortTime(_ minutes: Int) -> String { String(format: "%02d:%02d", minutes / 60, minutes % 60) }
@@ -97,10 +97,10 @@ private struct LifeBoardWidgetView: View {
 }
 
 private struct LifeBoardAgendaWidget: Widget {
-    let kind = "LifeBoardAgendaWidget"
+    let kind = LifeBoardEnvironment.widgetKind
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: kind, provider: AgendaProvider()) { entry in LifeBoardWidgetView(entry: entry) }
-            .configurationDisplayName("LifeBoard Next")
+            .configurationDisplayName(LifeBoardEnvironment.isPreview ? "LifeBoard Preview Next" : "LifeBoard Next")
             .description("Your next scheduled item and remaining To Dos.")
             .supportedFamilies([.systemSmall, .systemMedium])
     }

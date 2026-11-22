@@ -42,22 +42,20 @@ enum SyncService {
         let device: String
         let pairing: String
     }
-    private static var directory: URL {
-        if let path = ProcessInfo.processInfo.environment["LIFEBOARD_DATA_PATH"] { return URL(fileURLWithPath: path).deletingLastPathComponent() }
-        return FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support/LifeBoard")
-    }
+    private static var directory: URL { LifeBoardEnvironment.supportDirectory }
     static var credentialsURL: URL { directory.appendingPathComponent("SyncCredentials.json") }
     static var configurationURL: URL { directory.appendingPathComponent("SyncEndpoint.txt") }
     static var baselineURL: URL { directory.appendingPathComponent("SyncBaseline.json") }
     static var workspaceIdentityURL: URL { directory.appendingPathComponent("WorkspaceIdentity.txt") }
 
     static func endpoint() -> URL? {
-        guard let value = try? String(contentsOf: configurationURL, encoding: .utf8).trimmingCharacters(in: .whitespacesAndNewlines),
+        guard LifeBoardEnvironment.networkSyncAllowed,
+              let value = try? String(contentsOf: configurationURL, encoding: .utf8).trimmingCharacters(in: .whitespacesAndNewlines),
               let url = URL(string: value), url.scheme == "https", url.host != nil else { return nil }
         return url
     }
 
-    private static let keychainService = ProcessInfo.processInfo.environment["LIFEBOARD_DATA_PATH"] == nil ? "app.lifeboard.mac.sync" : "app.lifeboard.mac.sync.test." + UUID().uuidString
+    private static let keychainService = ProcessInfo.processInfo.environment["LIFEBOARD_DATA_PATH"] == nil ? LifeBoardEnvironment.keychainService : LifeBoardEnvironment.keychainService + ".test." + UUID().uuidString
     private static let credentialLock = NSLock()
     private static var keychainQuery: [String: Any] {
         [kSecClass as String: kSecClassGenericPassword,
@@ -181,7 +179,7 @@ enum SyncService {
     private struct DeviceList: Decodable { let devices: [ConnectedDevice] }
 
     private static func managementRequest(endpoint: URL, token: String, route: String, method: String, body: [String: String]? = nil) async throws -> Data {
-        guard endpoint.scheme == "https", let url = URL(string: route, relativeTo: endpoint)?.absoluteURL else { throw SyncFailure.unavailable }
+        guard LifeBoardEnvironment.networkSyncAllowed, endpoint.scheme == "https", let url = URL(string: route, relativeTo: endpoint)?.absoluteURL else { throw SyncFailure.unavailable }
         var request = URLRequest(url: url)
         request.httpMethod = method; request.timeoutInterval = 20
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
@@ -232,13 +230,14 @@ enum SyncService {
     }
 
     static func saveBaseline(_ baseline: SyncBaseline) throws {
-        let encoder = JSONEncoder(); encoder.dateEncodingStrategy = .iso8601
+        let encoder = LifeBoardJSON.encoder()
         let bytes = try encoder.encode(baseline)
         try bytes.write(to: baselineURL, options: .atomic)
         try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: baselineURL.path)
     }
 
     static func fetch(from endpoint: URL, token: String) async throws -> SyncEnvelope {
+        guard LifeBoardEnvironment.networkSyncAllowed else { throw SyncFailure.unavailable }
         var request = URLRequest(url: endpoint)
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         request.cachePolicy = .reloadIgnoringLocalCacheData
@@ -254,7 +253,8 @@ enum SyncService {
     }
 
     static func save(_ data: LifeBoardData, revision: Int, to endpoint: URL, token: String) async throws -> Int? {
-        let encoder = JSONEncoder(); encoder.dateEncodingStrategy = .iso8601
+        guard LifeBoardEnvironment.networkSyncAllowed else { throw SyncFailure.unavailable }
+        let encoder = LifeBoardJSON.encoder()
         var request = URLRequest(url: endpoint)
         request.httpMethod = "PUT"
         let payload = try encoder.encode(data)

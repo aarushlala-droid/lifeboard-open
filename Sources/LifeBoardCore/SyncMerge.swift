@@ -78,7 +78,7 @@ public enum LifeBoardSyncMerge {
     }
 
     static func dictionary(_ data: LifeBoardData) throws -> [String: Any] {
-        let encoder = JSONEncoder(); encoder.dateEncodingStrategy = .iso8601
+        let encoder = LifeBoardJSON.encoder()
         return try JSONSerialization.jsonObject(with: encoder.encode(data)) as? [String: Any] ?? [:]
     }
     static func records(_ value: Any?) -> [String: Any] {
@@ -105,14 +105,79 @@ public struct LifeBoardDataPatch {
 
     public init(before: LifeBoardData, after: LifeBoardData) throws {
         var list: [Operation] = []
-        Self.diff(try LifeBoardSyncMerge.dictionary(before), try LifeBoardSyncMerge.dictionary(after), path: [], list: &list)
+        // Identical records cannot produce an operation. Removing them first
+        // keeps a one-field edit from serialising the whole workspace twice.
+        let (prunedBefore, prunedAfter) = Self.pruned(before, after)
+        Self.diff(try LifeBoardSyncMerge.dictionary(prunedBefore), try LifeBoardSyncMerge.dictionary(prunedAfter), path: [], list: &list)
         operations = list
     }
     private init(operations: [Operation]) { self.operations = operations }
+
+    /// The original, unpruned diff. Tests compare it with the pruned one.
+    @_spi(Testing) public init(unprunedBefore before: LifeBoardData, after: LifeBoardData) throws {
+        var list: [Operation] = []
+        Self.diff(try LifeBoardSyncMerge.dictionary(before), try LifeBoardSyncMerge.dictionary(after), path: [], list: &list)
+        operations = list
+    }
+
+    /// A canonical description of every operation, for equivalence tests.
+    @_spi(Testing) public var canonicalOperations: [String] {
+        func render(_ value: Any?) -> String {
+            guard let value else { return "<absent>" }
+            let data = try? JSONSerialization.data(withJSONObject: ["v": value], options: [.sortedKeys, .fragmentsAllowed])
+            return data.map { String(decoding: $0, as: UTF8.self) } ?? String(describing: value)
+        }
+        return operations.map { "\($0.path.joined(separator: "/").lowercased()) \(render($0.before)) -> \(render($0.after))" }.sorted()
+    }
+
     public func reversed() -> LifeBoardDataPatch { LifeBoardDataPatch(operations: operations.map { Operation(path: $0.path, before: $0.after, after: $0.before) }) }
 
+    /// Applies the patch to the records it touches and validates the whole
+    /// result. Untouched records are carried over without re-encoding.
     public func applying(to data: LifeBoardData) throws -> LifeBoardData {
-        var root: Any = try LifeBoardSyncMerge.dictionary(data)
+        var touched: [String: Set<String>] = [:]
+        for operation in operations {
+            guard let top = operation.path.first else { return try applyingToWholeDocument(data) }
+            if LifeBoardSyncMerge.recordCollections.contains(top) {
+                guard operation.path.count >= 2 else { return try applyingToWholeDocument(data) }
+                touched[top, default: []].insert(operation.path[1].lowercased())
+            }
+        }
+        var partial = LifeBoardData()
+        partial.settings = data.settings
+        partial.activeFocus = data.activeFocus
+        Self.select(data.tasks, into: &partial.tasks, ids: touched["tasks"]) { $0.id.uuidString }
+        Self.select(data.events, into: &partial.events, ids: touched["events"]) { $0.id.uuidString }
+        Self.select(data.subjects, into: &partial.subjects, ids: touched["subjects"]) { $0.id.uuidString }
+        Self.select(data.projects, into: &partial.projects, ids: touched["projects"]) { $0.id.uuidString }
+        Self.select(data.yearMarkers, into: &partial.yearMarkers, ids: touched["yearMarkers"]) { $0.id.uuidString }
+        Self.select(data.activity, into: &partial.activity, ids: touched["activity"]) { $0.id.uuidString }
+        Self.select(data.focusSessions, into: &partial.focusSessions, ids: touched["focusSessions"]) { $0.id.uuidString }
+        Self.select(data.externalEvents, into: &partial.externalEvents, ids: touched["externalEvents"]) { $0.id }
+        let applied = try Self.decodeApplied(apply(to: try LifeBoardSyncMerge.dictionary(partial)))
+        var result = data
+        result.settings = applied.settings
+        result.activeFocus = applied.activeFocus
+        Self.splice(applied.tasks, into: &result.tasks, ids: touched["tasks"]) { $0.id.uuidString }
+        Self.splice(applied.events, into: &result.events, ids: touched["events"]) { $0.id.uuidString }
+        Self.splice(applied.subjects, into: &result.subjects, ids: touched["subjects"]) { $0.id.uuidString }
+        Self.splice(applied.projects, into: &result.projects, ids: touched["projects"]) { $0.id.uuidString }
+        Self.splice(applied.yearMarkers, into: &result.yearMarkers, ids: touched["yearMarkers"]) { $0.id.uuidString }
+        Self.splice(applied.activity, into: &result.activity, ids: touched["activity"]) { $0.id.uuidString }
+        Self.splice(applied.focusSessions, into: &result.focusSessions, ids: touched["focusSessions"]) { $0.id.uuidString }
+        Self.splice(applied.externalEvents, into: &result.externalEvents, ids: touched["externalEvents"]) { $0.id }
+        try LifeBoardValidation.validate(result)
+        return result
+    }
+
+    /// The original whole-document algorithm, kept for unusual patch shapes.
+    @_spi(Testing) public func applyingToWholeDocument(_ data: LifeBoardData) throws -> LifeBoardData {
+        let root = try apply(to: try LifeBoardSyncMerge.dictionary(data))
+        return try LifeBoardValidation.decode(try JSONSerialization.data(withJSONObject: root, options: [.sortedKeys]))
+    }
+
+    private func apply(to document: [String: Any]) throws -> Any {
+        var root: Any = document
         var conflicts: [String] = []
         for operation in operations {
             let current = Self.value(root, at: operation.path)
@@ -121,8 +186,58 @@ public struct LifeBoardDataPatch {
             root = Self.setting(root, path: operation.path, value: operation.after)
         }
         guard conflicts.isEmpty else { throw LifeBoardError.concurrentChange(conflicts) }
-        let bytes = try JSONSerialization.data(withJSONObject: root, options: [.sortedKeys])
-        return try LifeBoardValidation.decode(bytes)
+        return root
+    }
+
+    private static func decodeApplied(_ root: Any) throws -> LifeBoardData {
+        try LifeBoardJSON.decoder().decode(LifeBoardData.self, from: JSONSerialization.data(withJSONObject: root, options: [.sortedKeys]))
+    }
+
+    private static func select<T>(_ source: [T], into target: inout [T], ids: Set<String>?, key: (T) -> String) {
+        guard let ids, !ids.isEmpty else { return }
+        target = source.filter { ids.contains(key($0).lowercased()) }
+    }
+
+    private static func splice<T>(_ applied: [T], into target: inout [T], ids: Set<String>?, key: (T) -> String) {
+        guard let ids, !ids.isEmpty else { return }
+        let replacements = Dictionary(applied.map { (key($0).lowercased(), $0) }, uniquingKeysWith: { first, _ in first })
+        var placed = Set<String>()
+        var output: [T] = []
+        output.reserveCapacity(target.count + applied.count)
+        for item in target {
+            let id = key(item).lowercased()
+            guard ids.contains(id) else { output.append(item); continue }
+            if let replacement = replacements[id], placed.insert(id).inserted { output.append(replacement) }
+        }
+        // Records created by the patch are appended, matching the whole-document order.
+        for item in applied where !placed.contains(key(item).lowercased()) { output.append(item); placed.insert(key(item).lowercased()) }
+        target = output
+    }
+
+    static func pruned(_ before: LifeBoardData, _ after: LifeBoardData) -> (LifeBoardData, LifeBoardData) {
+        var b = before, a = after
+        prune(&b.tasks, &a.tasks) { $0.id.uuidString }
+        prune(&b.events, &a.events) { $0.id.uuidString }
+        prune(&b.subjects, &a.subjects) { $0.id.uuidString }
+        prune(&b.projects, &a.projects) { $0.id.uuidString }
+        prune(&b.yearMarkers, &a.yearMarkers) { $0.id.uuidString }
+        prune(&b.activity, &a.activity) { $0.id.uuidString }
+        prune(&b.focusSessions, &a.focusSessions) { $0.id.uuidString }
+        prune(&b.externalEvents, &a.externalEvents) { $0.id }
+        return (b, a)
+    }
+
+    private static func prune<T: Equatable>(_ left: inout [T], _ right: inout [T], key: (T) -> String) {
+        if left == right { left = []; right = []; return }
+        let leftKeys = left.map { key($0).lowercased() }, rightKeys = right.map { key($0).lowercased() }
+        // Duplicate IDs are invalid; leave such input to the original algorithm.
+        guard Set(leftKeys).count == left.count, Set(rightKeys).count == right.count else { return }
+        let rightByKey = Dictionary(uniqueKeysWithValues: zip(rightKeys, right))
+        var unchanged = Set<String>()
+        for (id, item) in zip(leftKeys, left) where rightByKey[id] == item { unchanged.insert(id) }
+        guard !unchanged.isEmpty else { return }
+        left = zip(leftKeys, left).filter { !unchanged.contains($0.0) }.map(\.1)
+        right = zip(rightKeys, right).filter { !unchanged.contains($0.0) }.map(\.1)
     }
 
     /// Copy explicitly reviewed conflict paths, retaining every other field.

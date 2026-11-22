@@ -1,5 +1,5 @@
-const CACHE = "lifeboard-shell-v15";
-const SHELL = ["/", "/app.css", "/app.js", "/sync.js", "/capture.js", "/task-groups.js", "/navigation.js", "/task-features.js", "/scheduling.js", "/manifest.webmanifest", "/icon-192.png", "/icon-512.png"];
+const CACHE = "lifeboard-shell-v17";
+const SHELL = ["/", "/tokens.css", "/app.css", "/app.js", "/icons.js", "/sync.js", "/capture.js", "/task-groups.js", "/navigation.js", "/task-features.js", "/scheduling.js", "/manifest.webmanifest", "/icon-192.png", "/icon-512.png"];
 self.addEventListener("install", event => {
   event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(SHELL)).then(() => self.skipWaiting()));
 });

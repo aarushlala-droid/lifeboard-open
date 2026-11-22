@@ -1,2 +1,36 @@
-<!doctype html><html lang="en-GB"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><meta name="theme-color" content="#f5f4f0"><link rel="icon" href="/icon-192.png"><link rel="stylesheet" href="/app.css"><title>Connect LifeBoard</title></head>
-<body class="connection-body"><main class="connect-page"><div class="brand"><img class="brand-mark" src="/icon-192.png" alt="" width="36" height="36"><span>LifeBoard</span></div><div class="page-head" ><p class="eyebrow">Mac + phone</p><h1>Connect your phone</h1><p class="subhead">Your LifeBoard, with you. Use the pairing code from your Mac to open your planner on this device.</p></div><form id="connect-form"><label class="field">Pairing code<input id="code" name="code" autocomplete="one-time-code" autocapitalize="characters" required maxlength="64" spellcheck="false"></label><button class="primary full" type="submit">Connect LifeBoard</button><p id="error" class="subhead" role="alert" hidden></p></form><div class="connection-note"><strong>Start on your Mac</strong><p>On your Mac, open Settings → Integrations → Mobile LifeBoard, then choose “Create one-time pairing code”.</p><p>Codes expire after ten minutes and work once. Your connection opens only your own workspace.</p></div></main><script type="module" src="/connect.js"></script></body></html>
+<!doctype html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#F6F5F1" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#111A26" media="(prefers-color-scheme: dark)">
+  <meta name="color-scheme" content="light dark">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="LifeBoard">
+  <meta name="description" content="Connect your phone to LifeBoard with a one-time pairing code from your Mac.">
+  <link rel="icon" href="/icon-192.png">
+  <link rel="apple-touch-icon" href="/icon-192.png">
+  <link rel="stylesheet" href="/tokens.css">
+  <link rel="stylesheet" href="/app.css">
+  <title>Connect LifeBoard</title>
+</head>
+<body class="connection-body">
+  <main class="connect-page">
+    <div class="brand"><img class="brand-mark" src="/icon-192.png" alt="" width="64" height="64"><span class="visually-hidden">LifeBoard</span></div>
+    <h1>Connect your phone</h1>
+    <p class="page-sub">Use the one-time pairing code from your Mac to open your planner on this device.</p>
+    <form id="connect-form">
+      <label class="field">Pairing code<input id="code" name="code" autocomplete="one-time-code" autocapitalize="characters" required maxlength="64" spellcheck="false"></label>
+      <button class="button primary full" type="submit">Connect LifeBoard</button>
+      <p id="error" class="connect-error" role="alert" hidden></p>
+    </form>
+    <div class="connection-note">
+      <strong>Start on your Mac</strong>
+      <p>Open LifeBoard Settings, choose Integrations, then Mobile LifeBoard, and create a one-time pairing code.</p>
+      <p>Codes expire after ten minutes and work once. This connection opens only your own workspace.</p>
+    </div>
+  </main>
+  <script type="module" src="/connect.js"></script>
+</body>
+</html>

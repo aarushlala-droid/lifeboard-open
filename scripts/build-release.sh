@@ -20,7 +20,12 @@ if [[ "${LIFEBOARD_UNIVERSAL:-0}" == "1" ]]; then
 fi
 BIN_DIRS=()
 for architecture in "${ARCHITECTURES[@]}"; do
-  swift build --disable-sandbox --scratch-path .build "${SWIFT_BUILD_ARGS[@]}" --triple "$architecture-apple-macosx" -c release
+  # The SDK compatibility flag lets SwiftPM report success despite compile
+  # errors, so any "error:" in the log fails the build.
+  BUILD_LOG="$(mktemp /tmp/lifeboard-release-log.XXXXXX)"
+  swift build --disable-sandbox --scratch-path .build "${SWIFT_BUILD_ARGS[@]}" --triple "$architecture-apple-macosx" -c release 2>&1 | tee "$BUILD_LOG"
+  if /usr/bin/grep -q "error:" "$BUILD_LOG"; then echo "Release build reported compiler errors; see $BUILD_LOG" >&2; exit 1; fi
+  rm -f "$BUILD_LOG"
   BIN_DIRS+=("$(swift build --disable-sandbox --scratch-path .build "${SWIFT_BUILD_ARGS[@]}" --triple "$architecture-apple-macosx" -c release --show-bin-path)")
 done
 

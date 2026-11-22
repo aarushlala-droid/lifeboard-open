@@ -74,16 +74,10 @@ public struct LifeBoardWidgetSnapshot: Codable, Hashable, Sendable {
 }
 
 public enum LifeBoardSharedStore {
-    public static let appGroupIdentifier = "group.app.lifeboard.mac"
+    public static let appGroupIdentifier = LifeBoardEnvironment.appGroupIdentifier
 
-    public static func directory(fileManager: FileManager = .default) -> URL {
-        if let path = ProcessInfo.processInfo.environment["LIFEBOARD_DATA_PATH"] { return URL(fileURLWithPath: path).deletingLastPathComponent() }
-        // A sandboxed widget's Foundation home is its container, not the host
-        // app's home. The extension has a read-only entitlement for this path.
-        let userHome = getpwuid(getuid()).map { String(cString: $0.pointee.pw_dir) }
-        return URL(fileURLWithPath: userHome ?? fileManager.homeDirectoryForCurrentUser.path, isDirectory: true)
-            .appendingPathComponent("Library/Application Support/LifeBoard", isDirectory: true)
-    }
+    /// The extension has a read-only entitlement for this exact folder.
+    public static func directory(fileManager: FileManager = .default) -> URL { LifeBoardEnvironment.supportDirectory }
 
     public static func snapshotURL(fileManager: FileManager = .default) -> URL {
         directory(fileManager: fileManager).appendingPathComponent("WidgetSnapshot.json")

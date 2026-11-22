@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import LifeBoardCore
 import Darwin
@@ -12,13 +13,16 @@ struct ExternalCalendarChoice: Identifiable { let id: String; let title: String;
     static var choices: [ExternalCalendarChoice] = []
     static var fetched: [ExternalCalendarEvent] = []
     static var queryCount = 0
+    static var accountRefreshCount = 0
     static weak var latest: CalendarIntegrationService?
     var onChange: (@MainActor () -> Void)?
     init() { Self.latest = self }
     var hasFullAccess: Bool { Self.granted }
     var accessGuidance: String { "Saved calendar events are kept. Use Settings › Integrations › Connect Calendars." }
     func requestAccess() async -> Bool { Self.requestCount += 1; return false }
+    func refreshAccountSources() { Self.accountRefreshCount += 1 }
     func refreshLocalStore() {}
+    func colour(forCalendarID id: String) -> NSColor? { nil }
     func availableCalendars() -> [ExternalCalendarChoice] { Self.choices }
     func events(calendarIDs: [String], from start: Date, to end: Date) -> [ExternalCalendarEvent] { Self.queryCount += 1; return Self.fetched.filter { calendarIDs.contains($0.calendarID) } }
     func openInternetAccounts() {}
@@ -366,6 +370,100 @@ for (index, delay) in [0.005, 0.03, 0.08, 0.15].enumerated() {
 }
 
 #if APPSTORE_SAFETY
+require(SchedulingEngine.calendarDropStart(y: 9 * 60 + 37, hourHeight: 60) == 9 * 60 + 35, "calendar drops snap to the closest five minutes")
+require(SchedulingEngine.calendarDropStart(y: (9 * 60 + 38) * 1.2, hourHeight: 72) == 9 * 60 + 40, "calendar drop coordinates scale with the timeline")
+require(SchedulingEngine.calendarDropStart(y: -1, hourHeight: 60) == 0, "midnight start clamps to the first minute")
+require(SchedulingEngine.calendarDropStart(y: 1439, hourHeight: 60) == 1435, "late task drop stays on the intended day")
+require(SchedulingEngine.calendarDropStart(y: 1439, hourHeight: 60, eventDuration: 47) == 1393, "late event preview retains its full duration")
+try MainActor.assumeIsolated {
+    let calendarFolder = folder.appendingPathComponent("calendar")
+    let repository = LifeBoardRepository(fileURL: calendarFolder.appendingPathComponent("planner.json"))
+    let monday = LocalDay(iso: "2026-11-02")!
+    let tuesday = monday.adding(days: 1)
+    var task = TaskItem(title: "Coursework")
+    task.estimatedMinutes = 30
+    task.scheduledDay = monday
+    task.scheduledStartMinutes = 9 * 60 + 10
+    task.scheduledDurationMinutes = 47
+    task.dueDay = monday.adding(days: 4)
+    task.tags = ["keep this"]
+    var shortEvent = CalendarEvent(title: "Check-in", day: monday, startMinutes: 600, endMinutes: 607)
+    shortEvent.location = "Lab"
+    var initial = LifeBoardData()
+    task.createdAt = Date(timeIntervalSinceReferenceDate: 765_432_100.1234567)
+    initial.tasks = [task]
+    initial.events = [shortEvent]
+    try repository.save(initial)
+    setenv("LIFEBOARD_DATA_PATH", repository.fileURL.path, 1)
+    defer { unsetenv("LIFEBOARD_DATA_PATH") }
+    let store = AppStore(repository: repository)
+    let undo = UndoManager()
+    store.undoManager = undo
+    let baseline = try repository.durableSnapshot()
+    require(baseline.tasks[0].createdAt == task.createdAt, "local storage preserves a fractional creation timestamp")
+    let offsetDate = try LifeBoardJSON.decoder().decode(Date.self, from: Data("\"2024-02-29T20:00:00.125+01:00\"".utf8))
+    let utcDate = try LifeBoardJSON.decoder().decode(Date.self, from: Data("\"2024-02-29T19:00:00.125Z\"".utf8))
+    require(offsetDate == utcDate, "date decoding preserves legacy fractional timestamps with an offset")
+
+    undo.beginUndoGrouping()
+    require(store.moveScheduledTask(task.id, day: tuesday, startMinutes: 1435), "task can be dragged across days and midnight")
+    undo.endUndoGrouping()
+    let moved = try repository.durableSnapshot().tasks[0]
+    var expected = baseline.tasks[0]
+    expected.scheduledDay = tuesday
+    expected.scheduledStartMinutes = 1435
+    expected.modifiedAt = moved.modifiedAt
+    require(moved == expected, "task move keeps the custom duration and all other fields on disk")
+    require(SchedulingEngine.taskSegment(moved, on: tuesday.adding(days: 1))?.end == 42, "overnight task occupies the correct next-day minutes")
+    let movedBytes = try Data(contentsOf: repository.fileURL)
+    require(store.moveScheduledTask(task.id, day: tuesday, startMinutes: 1435), "same-slot drop succeeds")
+    require((try Data(contentsOf: repository.fileURL)) == movedBytes, "same-slot drop leaves the saved document byte-identical")
+    undo.undo()
+    var restoredTask = try repository.durableSnapshot().tasks[0]
+    restoredTask.modifiedAt = baseline.tasks[0].modifiedAt // Undo retains modification metadata.
+    require(restoredTask == baseline.tasks[0], "calendar Undo restores the original task fields")
+    undo.redo()
+    require((try repository.durableSnapshot()).tasks == [moved], "calendar Redo restores the moved task")
+    require(store.moveScheduledTask(task.id, day: monday), "date-only drop moves an already timed task")
+    let dateOnly = try repository.durableSnapshot().tasks[0]
+    require(dateOnly.scheduledDay == monday && dateOnly.scheduledStartMinutes == 1435 && dateOnly.scheduledDurationMinutes == 47, "date-only drop preserves both time and duration")
+    var pending = TaskItem(title: "From the Today shelf")
+    pending.estimatedMinutes = 65
+    require(store.commit { $0.tasks.append(pending) }, "seed an unscheduled task for Today")
+    require(store.moveScheduledTask(pending.id, day: .today, startMinutes: 10 * 60 + 25), "untimed task can be placed on Today's timeline")
+    let scheduledToday = try repository.durableSnapshot().tasks[1]
+    require(scheduledToday.scheduledDay == .today && scheduledToday.scheduledStartMinutes == 625 && scheduledToday.scheduledDurationMinutes == 65, "Today reload keeps the snapped time and full estimate")
+    require(store.unscheduleTime(pending.id, day: .today), "drop back on Today's shelf clears the time")
+    let untimedToday = try repository.durableSnapshot().tasks[1]
+    require(untimedToday.scheduledDay == .today && untimedToday.scheduledStartMinutes == nil && untimedToday.scheduledDurationMinutes == nil, "Today untimed drop keeps the day and clears the saved interval")
+    require(store.moveEvent(shortEvent.id, day: tuesday, startMinutes: 1439), "late event move succeeds")
+    let movedEvent = try repository.durableSnapshot().events[0]
+    require(movedEvent.day == tuesday && movedEvent.startMinutes == 1433 && movedEvent.endMinutes == 1440 && movedEvent.location == "Lab", "seven-minute event still lasts seven minutes at midnight")
+
+    let first = calendarFolder.appendingPathComponent("Worksheet #1 – maths.pdf")
+    let second = calendarFolder.appendingPathComponent("Reference.txt")
+    let sourceBytes = Data("synthetic source".utf8)
+    try sourceBytes.write(to: first)
+    try sourceBytes.write(to: second)
+    undo.beginUndoGrouping()
+    require(store.addCalendarFiles([first, second], day: tuesday, startMinutes: 9 * 60 + 35), "multiple file URLs save as one scheduled task")
+    undo.endUndoGrouping()
+    let reopened = AppStore(repository: LifeBoardRepository(fileURL: repository.fileURL))
+    let imported = try repository.durableSnapshot().tasks[2]
+    require(reopened.data.tasks[2] == imported, "relaunch restores the full file task and its timing")
+    require(imported.scheduledDay == tuesday && imported.scheduledStartMinutes == 575 && CalendarFileLink.urls(in: imported.notes) == [first, second], "file links, Unicode, order and exact start survive reload")
+    let originalBytes = try [first, second].map { try Data(contentsOf: $0) }
+    require(originalBytes == [sourceBytes, sourceBytes], "scheduling files leaves original bytes unchanged")
+    let snapshot = try repository.durableSnapshot()
+    let backup = try repository.export(snapshot)
+    require((try repository.importBackup(from: backup)).tasks == snapshot.tasks, "backup preserves the scheduled file links and task fields")
+    undo.undo()
+    require((try repository.durableSnapshot()).tasks.count == 2, "one Undo removes the whole file drop")
+    let unchanged = try Data(contentsOf: repository.fileURL)
+    require(!store.addCalendarFiles([first, URL(string: "https://example.com/file")!], day: tuesday, startMinutes: 600), "invalid file batch is rejected")
+    require((try Data(contentsOf: repository.fileURL)) == unchanged, "invalid file batch leaves storage unchanged")
+}
+
 var deviceData = LifeBoardData()
 deviceData.settings.automaticICloudBackup = true
 deviceData.settings.notificationsDeadlines = true
@@ -438,6 +536,91 @@ try MainActor.assumeIsolated {
     require(!pausedCommit && pausedBytes == corrupt, "all ordinary AppStore mutations remain paused after corruption")
     require(!FileManager.default.fileExists(atPath: appRepository.iCloudBackupDirectory.path) && !FileManager.default.fileExists(atPath: appFolder.appendingPathComponent("BackupStatus.json").path), "corrupt-source backup cannot create cloud success or bookkeeping")
 }
+// Preview overhaul: completion, rescheduling, inline entry and the planner index.
+try MainActor.assumeIsolated {
+    let folder2 = folder.appendingPathComponent("overhaul")
+    let repository = LifeBoardRepository(fileURL: folder2.appendingPathComponent("planner.json"), iCloudBackupDirectory: folder2.appendingPathComponent("cloud"))
+    let today = LocalDay.today
+    var seed = LifeBoardData.seeded()
+    var timed = TaskItem(title: "Timed revision"); timed.scheduledDay = today; timed.scheduledStartMinutes = 17 * 60; timed.scheduledDurationMinutes = 40; timed.dueDay = today.adding(days: 3)
+    var untimed = TaskItem(title: "Untimed reading"); untimed.scheduledDay = today
+    var overdue = TaskItem(title: "Overdue write-up"); overdue.dueDay = today.adding(days: -1)
+    var later = TaskItem(title: "Later essay"); later.dueDay = today.adding(days: 20)
+    var archived = TaskItem(title: "Trashed"); archived.scheduledDay = today; archived.isArchived = true
+    var lateNight = TaskItem(title: "Late night"); lateNight.scheduledDay = today; lateNight.scheduledStartMinutes = 23 * 60 + 30; lateNight.scheduledDurationMinutes = 60
+    seed.tasks = [timed, untimed, overdue, later, archived, lateNight]
+    let tripStart = Calendar.current.startOfDay(for: today.adding(days: 2).date())
+    seed.externalEvents = [ExternalCalendarEvent(id: "multi", calendarID: "c", calendarTitle: "School", title: "Residential trip", day: today.adding(days: 2), startMinutes: 0, endMinutes: 1440, isAllDay: true, startInstant: tripStart, endInstant: Calendar.current.date(byAdding: .day, value: 3, to: tripStart), timeZoneIdentifier: TimeZone.current.identifier)]
+    seed.settings.hasCompletedOnboarding = true
+    try repository.save(seed)
+    setenv("LIFEBOARD_DATA_PATH", repository.fileURL.path, 1)
+    defer { unsetenv("LIFEBOARD_DATA_PATH") }
+    let store = AppStore(repository: repository)
+    let undo = UndoManager(); undo.groupsByEvent = false; store.undoManager = undo
+
+    // Completion is saved at once; the row lingers briefly in its group.
+    undo.beginUndoGrouping(); store.toggleCompletion(untimed.id, reduceMotion: true); undo.endUndoGrouping()
+    require(try repository.durableSnapshot().tasks.first { $0.id == untimed.id }?.isCompleted == true, "completing a task is durable immediately")
+    require(store.lingeringCompletions.contains(untimed.id), "a just-completed task lingers so the list does not jump")
+    require(store.index.todayGroups(lingering: store.lingeringCompletions, search: "").first { $0.id == "today" }?.tasks.contains { $0.id == untimed.id } == true, "a lingering task stays in its Today group")
+    require(store.index.todayGroups(lingering: [], search: "").first { $0.id == "done" }?.tasks.contains { $0.id == untimed.id } == true, "once settled it appears under Done today")
+    undo.undo()
+    require(try repository.durableSnapshot().tasks.first { $0.id == untimed.id }?.isCompleted == false, "Undo reopens the completed task on disk")
+    store.undoManager = nil // the remaining checks do not exercise Undo
+    store.toggleCompletion(untimed.id, reduceMotion: true); store.toggleCompletion(untimed.id, reduceMotion: true)
+    require(!store.lingeringCompletions.contains(untimed.id) && store.data.tasks.first { $0.id == untimed.id }?.isCompleted == false, "reopening at once cancels the linger")
+
+    // Rescheduling keeps an exact time, keeps an untimed task untimed and never touches the due date.
+    store.setWhen(timed.id, day: today.adding(days: 1))
+    let moved = try repository.durableSnapshot().tasks.first { $0.id == timed.id }!
+    require(moved.scheduledDay == today.adding(days: 1) && moved.scheduledStartMinutes == 17 * 60 && moved.scheduledDurationMinutes == 40 && moved.dueDay == today.adding(days: 3), "Do Tomorrow keeps the exact time, duration and due date")
+    store.setWhen(untimed.id, day: today.adding(days: 2))
+    let untimedMoved = try repository.durableSnapshot().tasks.first { $0.id == untimed.id }!
+    require(untimedMoved.scheduledDay == today.adding(days: 2) && untimedMoved.scheduledStartMinutes == nil, "an untimed task stays untimed when rescheduled")
+    store.setWhen(timed.id, day: nil)
+    let anytime = try repository.durableSnapshot().tasks.first { $0.id == timed.id }!
+    require(anytime.scheduledDay == nil && anytime.scheduledStartMinutes == nil && anytime.dueDay == today.adding(days: 3), "Anytime clears the plan but keeps the due date")
+    let weds = LocalDay(year: 2026, month: 11, day: 18)
+    require(store.weekendDay(from: weds) == LocalDay(year: 2026, month: 11, day: 21) && store.weekendDay(from: LocalDay(year: 2026, month: 11, day: 22)) == LocalDay(year: 2026, month: 11, day: 22), "This Weekend is the coming Saturday, or today at the weekend")
+    require(store.nextWeekDay(from: weds) == LocalDay(year: 2026, month: 11, day: 23) && store.nextWeekDay(from: LocalDay(year: 2026, month: 11, day: 23)) == LocalDay(year: 2026, month: 11, day: 30), "Next Week is the next week start, never today")
+
+    // A no-op change writes nothing.
+    let bytes = try Data(contentsOf: repository.fileURL)
+    let committedNothing = store.commit { _ in }
+    let bytesAfter = try Data(contentsOf: repository.fileURL)
+    require(committedNothing && bytesAfter == bytes, "a commit that changes nothing leaves the file byte-identical")
+
+    // Inline entry: exactly what the chips show is what is saved.
+    @MainActor func plan(_ line: String, _ context: NewTaskContext) -> QuickEntryPlan {
+        QuickEntryPlanner.plan(NaturalLanguageTaskParser.parse(line, referenceDay: today, data: store.data).first!, context: context, index: store.index)
+    }
+    let due = plan("chem worksheet tomorrow 30m", .today)
+    require(due.task?.dueDay == today.adding(days: 1) && due.task?.scheduledDay == nil && due.task?.estimatedMinutes == 30 && due.task?.subjectID == store.data.subjects.first { $0.title == "Chemistry" }?.id, "a typed date becomes a due date with its duration and subject, not a plan")
+    let timedEntry = plan("revise vectors at 5pm", .today)
+    require(timedEntry.task?.scheduledDay == today && timedEntry.task?.scheduledStartMinutes == 17 * 60 && timedEntry.problem == nil, "a time in Today is planned today at that time")
+    require(plan("revise vectors at 5pm", .none).problem != nil && plan("revise vectors at 5pm", .none).task == nil, "a time without any day must be clarified before saving")
+    require(plan("biology notes", .day(today.adding(days: 4))).task?.scheduledDay == today.adding(days: 4), "a calendar day plans the To Do for that day")
+    require(plan("tidy folder", .none).task?.scheduledDay == nil && plan("tidy folder", .none).chips.first == "Anytime", "To Do adds Anytime tasks")
+    require(plan("tidy folder", .today).task?.scheduledDay == today, "Today's field plans a To Do for today")
+    require(plan("tidy folder anytime", .today).task?.scheduledDay == nil && plan("tidy folder anytime", .today).chips.first == "Anytime" && plan("tidy folder anytime", .today).task?.title == "Tidy folder", "typing anytime in Today keeps a To Do undated")
+    require(plan("essay due 31/02", .today).problem != nil, "an impossible date is never saved")
+    let event = plan("drama rehearsal tomorrow at 4pm 90m", .today)
+    require(event.event?.day == today.adding(days: 1) && event.event?.startMinutes == 16 * 60 && event.event?.endMinutes == 17 * 60 + 30, "an event-like line with a time becomes an event")
+    require(plan("drama rehearsal tomorrow at 11pm 2h", .today).problem == "Events can't cross midnight", "an event may not cross midnight")
+
+    // Planner index: grouping, day buckets and overnight items.
+    let index = store.index
+    require(index.todayGroups(lingering: [], search: "").first { $0.id == "overdue" }?.tasks.map(\.id) == [overdue.id], "Overdue holds the past-due task")
+    let hub = index.todayGroups(lingering: [], search: "")
+    require(Set(hub.filter { $0.id != "done" }.flatMap(\.tasks).map(\.id)) == Set(index.activeTasks.map(\.id)), "Today lists every active To Do, Anytime and later ones included")
+    require(hub.first { $0.id == "upcoming" }?.tasks.contains { $0.id == later.id } == true && hub.map(\.id) == ["overdue", "today", "anytime", "upcoming", "done"], "Today orders its groups: overdue, today, Anytime, Upcoming, done")
+    require(!index.agenda(for: today).untimedTasks.contains { $0.id == archived.id }, "trashed tasks never appear on the calendar")
+    require((0...2).allSatisfy { index.agenda(for: today.adding(days: 2 + $0)).allDay.contains { $0.id == "multi" } } && !index.agenda(for: today.adding(days: 5)).allDay.contains { $0.id == "multi" }, "a three-day connected event appears on each of its days only")
+    require(index.agenda(for: today.adding(days: 1)).lanes.contains { $0.id == lateNight.id.uuidString && $0.start == 0 && $0.end == 30 }, "a task crossing midnight continues on the next day")
+    require(index.allGroups(lingering: [], search: "").first { $0.id == "upcoming" }?.tasks.contains { $0.id == later.id } == true, "dated To Dos beyond today are grouped under Upcoming in To Do")
+    require(index.allGroups(lingering: [], search: "essay").flatMap(\.tasks).map(\.id) == [later.id], "search filters every group")
+}
+
 // Run production async conflict resolution on the main actor, pumping the
 // runloop to avoid blocking its executor. The transport above is entirely local.
 final class AsyncTestState: @unchecked Sendable { var finished = false; var error: Error? }
@@ -457,9 +640,10 @@ Task { @MainActor in
         let calendarBytes = try Data(contentsOf: calendarRepository.fileURL)
         await Task.yield()
         require(CalendarIntegrationService.requestCount == 0, "native launch with selected calendars never requests calendar permission")
-        await calendarStore.refreshGoogleCalendar()
+        let deniedStatus = await calendarStore.refreshSelectedCalendarsNow()
         let refreshedCalendarBytes = try Data(contentsOf: calendarRepository.fileURL)
         require(CalendarIntegrationService.requestCount == 0 && calendarStore.data.externalEvents == calendarData.externalEvents && calendarStore.data.settings.selectedExternalCalendarIDs == calendarData.settings.selectedExternalCalendarIDs && refreshedCalendarBytes == calendarBytes, "refresh without full calendar access preserves cached events, selections and durable bytes without prompting")
+        require(CalendarIntegrationService.accountRefreshCount == 0 && deniedStatus.contains("Connect Calendars"), "manual sync reports how to connect without attempting an account pull when access is denied")
         await calendarStore.connectGoogleCalendar()
         let deniedCalendarBytes = try Data(contentsOf: calendarRepository.fileURL)
         require(CalendarIntegrationService.requestCount == 1 && calendarStore.data.externalEvents == calendarData.externalEvents && deniedCalendarBytes == calendarBytes, "only explicit Connect Calendars requests permission and denial keeps cached planner intact")
@@ -478,6 +662,9 @@ Task { @MainActor in
         require(calendarStore.data.externalEvents.contains(addedEvent) && CalendarIntegrationService.requestCount == 1, "calendar-store change automatically imports newly delivered events without requesting permission")
         require(try calendarRepository.loadThrowing().externalEvents.contains(addedEvent), "automatically refreshed calendar event is durable")
         require(calendarStore.data.settings.lastExternalCalendarRefresh != calendarData.settings.lastExternalCalendarRefresh, "calendar cache and device-local refresh timestamp advance together")
+        require(CalendarIntegrationService.accountRefreshCount == 0, "automatic calendar updates only read the local EventKit store")
+        let manualStatus = await calendarStore.refreshSelectedCalendarsNow()
+        require(CalendarIntegrationService.accountRefreshCount == 1 && manualStatus.hasPrefix("Refreshed at") && CalendarIntegrationService.requestCount == 1, "manual calendar sync requests a source pull and reports the local refresh result without prompting")
         calendarUndo.undo()
         require(!calendarStore.data.tasks.contains(where: { $0.id == manualTask }) && calendarStore.data.externalEvents.contains(addedEvent), "automatic calendar refresh leaves task Undo intact and keeps newly delivered events")
         let queries = CalendarIntegrationService.queryCount
@@ -526,6 +713,9 @@ Task { @MainActor in
         await store.resolveSyncConflicts(choices: [secondPath: true])
         require(store.syncConflicts.isEmpty && store.data.tasks[0].title == "Second local title" && SyncService.remote.data?.tasks[0].title == "Second local title", "reviewed keep local choice converges through conditional revision write")
         require(store.data.tasks[0].notes == "Independent remote note" && store.data.tasks.contains(where: { $0.title == "Independent remote task B" }), "conflict resolution preserves independent remote fields and added records")
+        let writesBefore = SyncService.writeCount
+        await store.syncNow()
+        require(SyncService.writeCount == writesBefore && store.syncConflicts.isEmpty && store.data.tasks[0].title == "Second local title", "an unchanged workspace syncs without rewriting the server copy")
     } catch { asyncState.error = error }
 }
 let asyncDeadline = Date.now.addingTimeInterval(20)

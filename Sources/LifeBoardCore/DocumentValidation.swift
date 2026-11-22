@@ -171,15 +171,41 @@ public enum LifeBoardValidation {
 
 /// Wire dates from web and calendar APIs may include fractional seconds.
 public enum LifeBoardJSON {
+    private static let wholeSecond = Date.ISO8601FormatStyle(includingFractionalSeconds: false)
+
+    public static func encoder() -> JSONEncoder {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .custom { date, output in
+            let interval = date.timeIntervalSinceReferenceDate
+            guard interval.isFinite else {
+                throw EncodingError.invalidValue(date, .init(codingPath: output.codingPath, debugDescription: "Invalid date"))
+            }
+            let seconds = floor(interval)
+            let fraction = Int(((interval - seconds) * 1_000_000_000).rounded())
+            let whole = Date(timeIntervalSinceReferenceDate: seconds + Double(fraction / 1_000_000_000))
+            let base = wholeSecond.format(whole).dropLast() // UTC's trailing Z
+            let nanos = String(format: "%09d", fraction % 1_000_000_000)
+            var value = output.singleValueContainer()
+            // Fixed-width UTC strings also retain chronological sort order during merges.
+            try value.encode("\(base).\(nanos)Z")
+        }
+        return encoder
+    }
+
     public static func decoder() -> JSONDecoder {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .custom { value in
             let raw = try value.singleValueContainer().decode(String.self)
-            let formatter = ISO8601DateFormatter()
-            formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-            if let date = formatter.date(from: raw) { return date }
-            formatter.formatOptions = [.withInternetDateTime]
-            if let date = formatter.date(from: raw) { return date }
+            if let point = raw.firstIndex(of: ".") {
+                let digits = raw[raw.index(after: point)...].prefix { $0.isASCII && $0.isNumber }
+                let zone = raw[digits.endIndex...]
+                if !digits.isEmpty, !zone.isEmpty, let fraction = Double("0.\(digits)"),
+                   let whole = try? wholeSecond.parse(String(raw[..<point]) + zone) {
+                    return whole.addingTimeInterval(fraction)
+                }
+            } else if let date = try? wholeSecond.parse(raw) {
+                return date
+            }
             throw DecodingError.dataCorrupted(.init(codingPath: value.codingPath, debugDescription: "Invalid ISO date"))
         }
         return decoder

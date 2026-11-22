@@ -392,6 +392,9 @@ public struct LifeBoardData: Codable, Sendable {
     }
 }
 
+// Value equality lets the app skip no-op saves without serialising the workspace.
+extension LifeBoardData: Equatable {}
+
 public struct TaskImportPayload: Codable, Sendable {
     public var title: String
     public var notes: String?

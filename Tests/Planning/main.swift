@@ -36,3 +36,44 @@ precondition(segment.start == 90 && segment.end >= 165)
 let full = SchedulingEngine.suggest([ScheduleRequest(id: UUID(), duration: 30)], busy: [.init(start: 0, end: 1440)], windowStart: 1020, hardStop: 1320, breakMinutes: 10)
 precondition(full[0].start == nil)
 print("All-day/multi-day/DST/full-calendar occupancy passed")
+
+// Shared Swift/JS abbreviation corpus. The cases live in
+// mobile/tests/abbreviations.test.mjs so both parsers meet one set of results.
+struct AbbreviationCase: Decodable { var input: String; var title: String; var day: String?; var time: Int?; var minutes: Int?; var priority: String?; var subject: String?; var anytime: Bool?; var review: Bool? }
+struct AbbreviationCorpus: Decodable { var reference: String; var defaultMinutes: Int; var subjects: [String]; var cases: [AbbreviationCase] }
+let repositoryRoot = URL(fileURLWithPath: CommandLine.arguments[1]).deletingLastPathComponent().deletingLastPathComponent()
+let corpusSource = try String(contentsOf: repositoryRoot.appendingPathComponent("mobile/tests/abbreviations.test.mjs"), encoding: .utf8)
+guard let corpusStart = corpusSource.range(of: "/* abbreviation-corpus:start */"), let corpusEnd = corpusSource.range(of: "/* abbreviation-corpus:end */") else { preconditionFailure("Abbreviation corpus markers are missing") }
+let corpus = try JSONDecoder().decode(AbbreviationCorpus.self, from: Data(corpusSource[corpusStart.upperBound..<corpusEnd.lowerBound].utf8))
+var abbreviationData = LifeBoardData()
+abbreviationData.subjects = corpus.subjects.map { Subject(title: $0) }
+abbreviationData.settings.defaultTaskMinutes = corpus.defaultMinutes
+let abbreviationDay = LocalDay(iso: corpus.reference)!
+func summary(_ draft: CapturedTaskDraft?) -> String {
+    guard let draft else { return "no draft" }
+    let subject = abbreviationData.subjects.first { $0.id == draft.subjectID }?.title ?? "-"
+    return [draft.title, draft.targetDay?.id ?? "-", draft.startMinutes.map(String.init) ?? "-", String(draft.estimatedMinutes), draft.priority.rawValue, subject, String(draft.isAnytime), String(draft.needsReview)].joined(separator: " | ")
+}
+var corpusFailures: [String] = []
+for row in corpus.cases {
+    let actual = summary(NaturalLanguageTaskParser.parse(row.input, referenceDay: abbreviationDay, data: abbreviationData).first)
+    let expected = [row.title, row.day ?? "-", row.time.map(String.init) ?? "-", String(row.minutes ?? corpus.defaultMinutes), row.priority ?? "none", row.subject ?? "-", String(row.anytime ?? false), String(row.review ?? false)].joined(separator: " | ")
+    if actual != expected { corpusFailures.append("\(row.input.debugDescription)\n  got      \(actual)\n  expected \(expected)") }
+}
+if !corpusFailures.isEmpty { fputs(corpusFailures.joined(separator: "\n") + "\n", stderr) }
+precondition(corpusFailures.isEmpty, "\(corpusFailures.count) abbreviation corpus case(s) failed")
+
+let split = NaturalLanguageTaskParser.parse("maths and chem tonite 40 mins each", referenceDay: abbreviationDay, data: abbreviationData)
+precondition(split.map(\.title) == ["Maths", "Chem"] && split.allSatisfy { $0.estimatedMinutes == 40 && $0.targetDay == abbreviationDay }, "abbreviated tonight splits a shared each line")
+precondition(split.map { draft in abbreviationData.subjects.first { $0.id == draft.subjectID }?.title } == ["Mathematics", "Chemistry"], "split items keep their subjects")
+for (short, written) in [("call Priya tmr @3pm", "call Priya tomorrow at 3pm"), ("meet fri @ 15:30", "meet friday at 15:30"), ("essay nxt wk p1", "essay next week high priority")] {
+    var abbreviated = NaturalLanguageTaskParser.parse(short, referenceDay: abbreviationDay, data: abbreviationData)[0]
+    let reference = NaturalLanguageTaskParser.parse(written, referenceDay: abbreviationDay, data: abbreviationData)[0]
+    precondition(abbreviated.originalText == short, "the typed text is kept as the original")
+    abbreviated.id = reference.id; abbreviated.originalText = reference.originalText
+    precondition(abbreviated == reference, "\(short) behaves exactly like \(written)")
+}
+let headed = NaturalLanguageTaskParser.parse("fri:\ntidy desk whenever", referenceDay: abbreviationDay, data: abbreviationData)
+precondition(headed.count == 1 && headed[0].isAnytime && headed[0].targetDay == nil, "anytime clears an inherited heading day")
+precondition(NaturalLanguageTaskParser.parse("call Priya tmr @3pm", referenceDay: abbreviationDay, data: abbreviationData)[0].kind == .event, "an abbreviated call with a time is still an event")
+print("Shared abbreviation corpus (\(corpus.cases.count) cases), split, @ and anytime checks passed")

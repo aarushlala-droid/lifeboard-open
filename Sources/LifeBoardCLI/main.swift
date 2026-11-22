@@ -17,6 +17,18 @@ struct CLI {
         guard arguments.count >= 2 else { return help() }
         let group = arguments[0], action = arguments[1]
         if group == "data", action == "path" { print(repository.fileURL.path); return }
+        if group == "sample", action == "load" {
+            // Preview builds only: replace the Preview planner with synthetic data,
+            // keeping an exact copy of any existing Preview file first.
+            guard LifeBoardEnvironment.isPreview else { throw LifeBoardError.invalidPayload }
+            if FileManager.default.fileExists(atPath: repository.fileURL.path) { print("kept a copy at \(try repository.exportOriginal().path)") }
+            let sample = repository.backupDirectory.appendingPathComponent("Sample-Week-\(UUID().uuidString).json")
+            try repository.export(SampleData.studentWeek(), to: sample)
+            let loaded = try repository.replaceFromBackup(from: sample)
+            if ProcessInfo.processInfo.environment["LIFEBOARD_DATA_PATH"] == nil { _ = try? LifeBoardSharedStore.writeSnapshot(loaded) }
+            print("loaded sample week: \(loaded.tasks.count) tasks, \(loaded.externalEvents.count) calendar events")
+            return
+        }
         var data = try repository.loadThrowing()
         switch (group, action) {
         case ("import", _):

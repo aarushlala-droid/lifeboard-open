@@ -27,16 +27,10 @@ public final class LifeBoardRepository: @unchecked Sendable {
     private var loaded = false
 
     public init(fileURL: URL? = nil, iCloudBackupDirectory: URL? = nil) {
-        let manager = FileManager.default
-        let base = manager.homeDirectoryForCurrentUser
-            .appendingPathComponent("Library/Application Support/LifeBoard", isDirectory: true)
-        let environmentFile = ProcessInfo.processInfo.environment["LIFEBOARD_DATA_PATH"].map { URL(fileURLWithPath: $0) }
-        self.fileURL = fileURL ?? environmentFile ?? base.appendingPathComponent("LifeBoard.json")
-        self.backupDirectory = (fileURL != nil || environmentFile != nil ? self.fileURL.deletingLastPathComponent() : base).appendingPathComponent("Backups", isDirectory: true)
-        let environmentICloud = ProcessInfo.processInfo.environment["LIFEBOARD_ICLOUD_BACKUP_PATH"].map { URL(fileURLWithPath: $0, isDirectory: true) }
-        self.iCloudBackupDirectory = iCloudBackupDirectory ?? environmentICloud ?? manager.homeDirectoryForCurrentUser
-            .appendingPathComponent("Library/Mobile Documents/com~apple~CloudDocs/LifeBoard Backups", isDirectory: true)
-        encoder = JSONEncoder(); encoder.outputFormatting = [.prettyPrinted, .sortedKeys]; encoder.dateEncodingStrategy = .iso8601
+        self.fileURL = fileURL ?? LifeBoardEnvironment.dataFileURL
+        self.backupDirectory = (fileURL?.deletingLastPathComponent() ?? LifeBoardEnvironment.supportDirectory).appendingPathComponent("Backups", isDirectory: true)
+        self.iCloudBackupDirectory = iCloudBackupDirectory ?? LifeBoardEnvironment.automaticBackupDirectory
+        encoder = LifeBoardJSON.encoder(); encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         decoder = JSONDecoder(); decoder.dateDecodingStrategy = .iso8601
     }
 
@@ -64,17 +58,17 @@ public final class LifeBoardRepository: @unchecked Sendable {
         try withLock {
             try LifeBoardValidation.validate(proposed)
             let currentBytes = FileManager.default.fileExists(atPath: fileURL.path) ? try Data(contentsOf: fileURL) : nil
-            let current = try currentBytes.map(LifeBoardValidation.decode)
             var value = proposed
+            // Bytes identical to this process's last load or save were already
+            // validated, so only a changed file pays for a full decode and merge.
             if currentBytes != loadedBytes {
+                let current = try currentBytes.map(LifeBoardValidation.decode)
                 guard loaded, let base = loadedBaseline, let current else { throw LifeBoardError.concurrentChange(["workspace changed or disappeared; reload and retry"]) }
                 let result = try LifeBoardSyncMerge.merge(base: base, local: proposed, remote: current)
                 guard let merged = result.data else { throw LifeBoardError.concurrentChange(result.conflicts) }
                 value = merged
-            } else if !loaded, current != nil {
-                throw LifeBoardError.concurrentChange(["load workspace before editing"])
+                try LifeBoardValidation.validate(value)
             }
-            try LifeBoardValidation.validate(value)
             let bytes = try encoder.encode(value)
             guard bytes.count <= LifeBoardValidation.maximumDocumentBytes else { throw LifeBoardError.invalidPayload }
             if bytes != currentBytes { try LifeBoardPrivateFiles.write(bytes, to: fileURL) }

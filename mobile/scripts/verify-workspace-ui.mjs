@@ -112,9 +112,9 @@ try {
   assert.equal((await durable('workspace:' + newID)).data.tasks.length, 0);
   assert.deepEqual((await durable('workspace:' + oldID)).data, snapshots.get(oldID).data);
   assert.ok(!(await page.locator('body').innerText()).includes('Private cached workspace A task'));
-  await page.getByRole('button', { name: '＋ Add To Do', exact: true }).click();
+  await page.getByRole('button', { name: 'Add To Do', exact: true }).click();
   await page.getByLabel('Title', { exact: true }).fill('New workspace B task');
-  await page.getByRole('button', { name: 'Save', exact: true }).click(); await synced();
+  await page.getByRole('button', { name: 'Add', exact: true }).click(); await synced();
   const newWrites = requests.filter(request => request.workspaceID === newID && request.method === 'PUT');
   assert.ok(newWrites.length > 0);
   for (const request of newWrites) assert.ok(request.data.tasks.every(task => task.title !== 'Private cached workspace A task' && task.notes !== 'Synthetic recovery marker A'));

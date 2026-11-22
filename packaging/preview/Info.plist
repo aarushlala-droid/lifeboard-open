@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+<key>CFBundleName</key><string>LifeBoard Preview</string>
+<key>CFBundleDisplayName</key><string>LifeBoard Preview</string>
+<key>CFBundleIdentifier</key><string>app.lifeboard.preview</string>
+<key>CFBundleExecutable</key><string>LifeBoard</string>
+<key>CFBundlePackageType</key><string>APPL</string>
+<key>CFBundleShortVersionString</key><string>5.0.0</string>
+<key>CFBundleVersion</key><string>22</string>
+<key>LSMinimumSystemVersion</key><string>14.0</string>
+<key>LSApplicationCategoryType</key><string>public.app-category.productivity</string>
+<key>NSHighResolutionCapable</key><true/>
+<key>NSCalendarsFullAccessUsageDescription</key><string>LifeBoard Preview shows the connected Google, iCloud and Microsoft Exchange calendars you select alongside your optional task schedule. It only reads them.</string>
+<key>CFBundleIconFile</key><string>AppIcon.icns</string>
+<key>UTExportedTypeDeclarations</key><array><dict>
+    <key>UTTypeIdentifier</key><string>app.lifeboard.preview.calendar-item</string>
+    <key>UTTypeDescription</key><string>LifeBoard Preview Calendar Item</string>
+    <key>UTTypeConformsTo</key><array><string>public.data</string></array>
+</dict></array>
+<key>CFBundleURLTypes</key><array><dict><key>CFBundleURLName</key><string>LifeBoard Preview Import</string><key>CFBundleURLSchemes</key><array><string>lifeboard-preview</string></array></dict></array>
+</dict></plist>

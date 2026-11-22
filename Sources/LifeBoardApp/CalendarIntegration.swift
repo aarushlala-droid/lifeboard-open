@@ -26,7 +26,24 @@ final class CalendarIntegrationService {
             }
     }
 
+    func refreshAccountSources() {
+        store.refreshSourcesIfNecessary()
+    }
+
+    private var colourCache: [String: NSColor] = [:]
+
+    /// The colour chosen for this calendar in Calendar, so connected events
+    /// look the same in LifeBoard. Read locally; nothing is stored or synced.
+    func colour(forCalendarID id: String) -> NSColor? {
+        if let cached = colourCache[id] { return cached }
+        guard hasFullAccess, let calendar = store.calendar(withIdentifier: id) else { return nil }
+        let colour = NSColor(cgColor: calendar.cgColor)
+        if let colour { colourCache[id] = colour }
+        return colour
+    }
+
     func refreshLocalStore() {
+        colourCache = [:]
         guard hasFullAccess else { return }
         // This integration only reads events; there are no unsaved EventKit
         // edits to lose when invalidating objects from an earlier query.

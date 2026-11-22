@@ -33,7 +33,7 @@ Due day, scheduled day and scheduled start time are deliberately separate. Calen
 
 ## Photo-to-LifeBoard workflow
 
-Inside LifeBoard, Command-N opens Capture. It accepts natural-language text, multiline lists, clipboard images, dragged images and files. Vision extracts image text, Apple Foundation Models interprets it locally when available, and the deterministic parser remains available when Apple Intelligence is unavailable. A single editable preview is always shown before anything is added.
+Inside LifeBoard, Command-N opens Capture. It accepts natural-language text, multiline lists, clipboard images, dragged images and files. Vision reads image text locally. On-device Apple Intelligence checks titles for both text and images. LifeBoard preserves the task wording and keeps parsed dates, times and durations in separate fields. Capture names the engine used for each editable preview and offers a fast local parser mode.
 
 In Codex or another ChatGPT client with local Mac access, attach a photo and ask: “Read the tasks in this image, show me what you found, then add the confirmed items to LifeBoard.” The agent should write one temporary JSON array and invoke the bundled helper once:
 

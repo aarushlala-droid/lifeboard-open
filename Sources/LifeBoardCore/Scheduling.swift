@@ -26,6 +26,15 @@ public struct CalendarLane: Identifiable, Sendable {
     public var laneCount: Int
 }
 public enum SchedulingEngine {
+    /// Convert timeline coordinates to wall-clock minutes. Local events must
+    /// fit within their day, while tasks can continue into the following day.
+    public static func calendarDropStart(y: Double, hourHeight: Double, eventDuration: Int? = nil) -> Int {
+        guard y.isFinite, hourHeight.isFinite, hourHeight > 0 else { return 0 }
+        let minute = min(1435, max(0, y / hourHeight * 60))
+        let snapped = Int((minute / 5).rounded()) * 5
+        return min(snapped, 1440 - min(1440, max(1, eventDuration ?? 1)))
+    }
+
     /// All-day selected calendars are busy by default. No source event is modified.
     public static func externalSegment(_ event: ExternalCalendarEvent, on day: LocalDay, calendar: Calendar = .current) -> BusyInterval? {
         if let start = event.startInstant, let end = event.endInstant {

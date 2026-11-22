@@ -52,21 +52,21 @@ final class NotificationCoordinator: NSObject, UNUserNotificationCenterDelegate,
         if data.settings.notificationsScheduledItems {
             for task in data.tasks where !task.isCompleted && !task.isArchived {
                 guard let day = task.scheduledDay, let minutes = task.scheduledStartMinutes else { continue }
-                if let request = makeReminder(title: task.title, body: "Scheduled in \(data.settings.notificationLeadMinutes) minutes", date: notificationDate(day: day, minutes: minutes, lead: data.settings.notificationLeadMinutes), id: "lifeboard-task-\(task.id)", url: "lifeboard://task/\(task.id)", now: now) { requests.append(request) }
+                if let request = makeReminder(title: task.title, body: "Scheduled in \(data.settings.notificationLeadMinutes) minutes", date: notificationDate(day: day, minutes: minutes, lead: data.settings.notificationLeadMinutes), id: "lifeboard-task-\(task.id)", url: "\(LifeBoardEnvironment.urlScheme)://task/\(task.id)", now: now) { requests.append(request) }
             }
             for event in data.events {
-                if let request = makeReminder(title: event.title, body: "Starts in \(data.settings.notificationLeadMinutes) minutes", date: notificationDate(day: event.day, minutes: event.startMinutes, lead: data.settings.notificationLeadMinutes), id: "lifeboard-event-\(event.id)", url: "lifeboard://calendar", now: now) { requests.append(request) }
+                if let request = makeReminder(title: event.title, body: "Starts in \(data.settings.notificationLeadMinutes) minutes", date: notificationDate(day: event.day, minutes: event.startMinutes, lead: data.settings.notificationLeadMinutes), id: "lifeboard-event-\(event.id)", url: "\(LifeBoardEnvironment.urlScheme)://calendar", now: now) { requests.append(request) }
             }
         }
         if data.settings.notificationsDeadlines {
             for task in data.tasks where !task.isCompleted && !task.isArchived {
                 guard let day = task.dueDay else { continue }
-                if let request = makeReminder(title: task.title, body: "Due today", date: notificationDate(day: day, minutes: 9 * 60, lead: 0), id: "lifeboard-deadline-\(task.id)", url: "lifeboard://task/\(task.id)", now: now) { requests.append(request) }
+                if let request = makeReminder(title: task.title, body: "Due today", date: notificationDate(day: day, minutes: 9 * 60, lead: 0), id: "lifeboard-deadline-\(task.id)", url: "\(LifeBoardEnvironment.urlScheme)://task/\(task.id)", now: now) { requests.append(request) }
             }
         }
         if data.settings.notificationsFocus, let active = data.activeFocus, active.pausedAt == nil {
             let end = active.startedAt.addingTimeInterval(Double(active.plannedMinutes * 60) + active.pausedSeconds)
-            if let request = makeReminder(title: active.kind == .shortBreak ? "Break complete" : "Focus complete", body: active.taskTitle, date: end, id: "lifeboard-focus", url: active.taskID.map { "lifeboard://task/\($0)" } ?? "lifeboard://focus", now: now) { requests.append(request) }
+            if let request = makeReminder(title: active.kind == .shortBreak ? "Break complete" : "Focus complete", body: active.taskTitle, date: end, id: "lifeboard-focus", url: active.taskID.map { "\(LifeBoardEnvironment.urlScheme)://task/\($0)" } ?? "\(LifeBoardEnvironment.urlScheme)://focus", now: now) { requests.append(request) }
         }
         // iOS/macOS has a finite pending-request budget; nearest reminders first.
         let sorted = requests.sorted { left, right in
@@ -101,7 +101,7 @@ final class NotificationCoordinator: NSObject, UNUserNotificationCenterDelegate,
         content.title = active.kind == .shortBreak ? "Break complete" : "Focus complete"
         content.body = active.kind == .shortBreak ? "Ready to continue?" : active.taskTitle
         content.sound = .default
-        content.userInfo = ["url": active.taskID.map { "lifeboard://task/\($0)" } ?? "lifeboard://focus"]
+        content.userInfo = ["url": active.taskID.map { "\(LifeBoardEnvironment.urlScheme)://task/\($0)" } ?? "\(LifeBoardEnvironment.urlScheme)://focus"]
         center.add(UNNotificationRequest(identifier: "lifeboard-focus", content: content, trigger: UNTimeIntervalNotificationTrigger(timeInterval: remaining, repeats: false)))
     }
 

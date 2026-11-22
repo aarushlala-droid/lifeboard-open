@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT="${0:A:h}/.."
-SOURCE="$ROOT/Sources/LifeBoardApp/Resources/AppIcon-Source.png"
+SOURCE="${LIFEBOARD_ICON_SOURCE:-$ROOT/Sources/LifeBoardApp/Resources/AppIcon-Source.png}"
 ICONSET="$ROOT/.build/AppIcon.iconset"
 OUTPUT="${1:-$ROOT/.build/AppIcon.icns}"
 

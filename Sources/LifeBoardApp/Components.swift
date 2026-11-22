@@ -2,101 +2,6 @@ import SwiftUI
 import UniformTypeIdentifiers
 import LifeBoardCore
 
-struct RootView: View {
-    @EnvironmentObject private var store: AppStore
-    @Environment(\.undoManager) private var undoManager
-    @Binding var selected: AppSection
-    @Binding var showQuickAdd: Bool
-    @State private var showInspector = false
-    @State private var sidebarVisibility: NavigationSplitViewVisibility = .all
-    @State private var sidebarBeforeInspector: NavigationSplitViewVisibility = .all
-    @State private var searchText = ""
-    @State private var creationKind: CreationKind?
-
-    var body: some View {
-        NavigationSplitView(columnVisibility: $sidebarVisibility) {
-            List(selection: $selected) {
-                Section("Do") { SidebarRow(section: .today); SidebarRow(section: .inbox) }
-                Section("Plan") { SidebarRow(section: .calendar); SidebarRow(section: .focus) }
-                Section("Big Picture") { SidebarRow(section: .subjects); SidebarRow(section: .projects); SidebarRow(section: .year) }
-                Section { SidebarRow(section: .completed); SidebarRow(section: .settings); SidebarRow(section: .help) }
-            }
-            .navigationTitle("LifeBoard")
-            .navigationSplitViewColumnWidth(min: 180, ideal: 210, max: 260)
-        } detail: {
-            HStack(spacing: 0) {
-                Group {
-                    if searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                        switch selected {
-                        case .today: TodayView(searchText: searchText)
-                        case .calendar: CalendarView(searchText: searchText)
-                        case .inbox: InboxView(searchText: searchText)
-                        case .focus: FocusDashboardView()
-                        case .subjects: SubjectsView(searchText: searchText)
-                        case .projects: ProjectsView(searchText: searchText)
-                        case .year: YearView()
-                        case .completed: CompletedView(searchText: searchText)
-                        case .settings: SettingsView()
-                        case .help: HelpView()
-                        }
-                    } else {
-                        SearchResultsView(query: searchText, selectedSection: $selected)
-                    }
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-
-                if showInspector {
-                    Divider()
-                    Group {
-                        if let id = store.selectedTaskID { TaskInspector(taskID: id).id(id) }
-                        else if let id = store.selectedEventID { EventInspector(eventID: id).id(id) }
-                        else { ContentUnavailableView("Nothing Selected", systemImage: "sidebar.trailing", description: Text("Select a task or event to inspect its details.")) }
-                    }
-                    .frame(width: 330)
-                    .frame(maxHeight: .infinity)
-                    .background(.bar)
-                    .transition(.move(edge: .trailing).combined(with: .opacity))
-                }
-            }
-            .searchable(text: $searchText, placement: .toolbar, prompt: "Search LifeBoard")
-            .toolbar {
-                ToolbarItemGroup {
-                    Button("Capture", systemImage: "plus") { showQuickAdd = true }
-                        .buttonStyle(.borderedProminent)
-                        .help("Capture one task, a list, or an image (⌘N)")
-                    Menu {
-                        Button("Task…", systemImage: "checklist") { creationKind = .task }
-                        Button("Event…", systemImage: "calendar.badge.plus") { creationKind = .event }
-                        Button("Project…", systemImage: "folder.badge.plus") { creationKind = .project }
-                        Button("Subject…", systemImage: "book.closed") { creationKind = .subject }
-                        Button("Milestone…", systemImage: "diamond") { creationKind = .milestone }
-                        Button("Year Marker…", systemImage: "flag") { creationKind = .yearMarker }
-                    } label: { Label("More", systemImage: "ellipsis.circle") }
-                    .help("Create an event or Big Picture item")
-                    Button { showInspector.toggle() } label: { Label("Inspector", systemImage: "sidebar.trailing") }
-                        .disabled(store.selectedTaskID == nil && store.selectedEventID == nil)
-                        .help("Show details")
-                }
-            }
-            .onChange(of: selected) { _, _ in showInspector = false }
-            .onChange(of: showInspector) { _, visible in
-                if visible { sidebarBeforeInspector = sidebarVisibility; sidebarVisibility = .detailOnly }
-                else { sidebarVisibility = sidebarBeforeInspector }
-            }
-            .onChange(of: store.selectedTaskID) { _, value in if value != nil { showInspector = true } }
-            .onChange(of: store.selectedEventID) { _, value in if value != nil { showInspector = true } }
-            .onChange(of: store.requestedSectionRaw) { _, raw in if let raw, let section = AppSection(rawValue: raw) { selected = section; store.requestedSectionRaw = nil } }
-            .sheet(item: $creationKind) { kind in ItemCreationView(kind: kind).environmentObject(store) }
-            .sheet(isPresented: Binding(get: { store.focusRequestTaskID != nil }, set: { if !$0 { store.focusRequestTaskID = nil } })) {
-                if let taskID = store.focusRequestTaskID { FocusStartView(taskID: taskID).environmentObject(store) }
-            }
-            .sheet(item: $store.focusCompletion) { completion in FocusCompletionView(completion: completion).environmentObject(store) }
-            .safeAreaInset(edge: .bottom, spacing: 0) { ActiveFocusBar().environmentObject(store) }
-            .onAppear { store.undoManager = undoManager }
-        }
-    }
-}
-
 struct SearchResultsView: View {
     @EnvironmentObject private var store: AppStore
     let query: String
@@ -214,12 +119,6 @@ struct ItemCreationView: View {
     }
 }
 
-private struct SidebarRow: View {
-    let section: AppSection
-    init(section: AppSection) { self.section = section }
-    var body: some View { Label(section.title, systemImage: section.icon).tag(section) }
-}
-
 struct QuickAddView: View {
     enum ImportMode: String, CaseIterable, Identifiable { case todo = "Add to To Do", schedule = "Suggest Schedule"; var id: String { rawValue } }
 
@@ -230,7 +129,9 @@ struct QuickAddView: View {
     @State private var mode: ImportMode
     @State private var isInterpreting = false
     @State private var interpretationTask: Task<Void, Never>?
-    @State private var note = CaptureIntelligence.availabilityDescription()
+    @State private var liveParse: Task<Void, Never>?
+    @AppStorage("captureUsesAppleIntelligence") private var usesAppleIntelligence = true
+    @State private var note = ""
     @State private var errorText: String?
     @State private var imageName: String?
     @FocusState private var inputFocused: Bool
@@ -285,16 +186,19 @@ struct QuickAddView: View {
                         .dropDestination(for: URL.self) { urls, _ in importDropped(urls); return !urls.isEmpty }
 
                     if let errorText { Label(errorText, systemImage: "exclamationmark.triangle").foregroundStyle(.orange).font(.callout) }
+                    Toggle("Use on-device Apple Intelligence", isOn: $usesAppleIntelligence)
+                        .toggleStyle(.switch).controlSize(.small).disabled(isInterpreting)
                     Text(note).font(.caption).foregroundStyle(.secondary)
                     Spacer()
                     Button {
                         interpret()
                     } label: {
                         if isInterpreting { ProgressView().controlSize(.small).frame(maxWidth: .infinity) }
-                        else { Label(drafts.isEmpty ? "Interpret" : "Interpret Again", systemImage: "sparkles").frame(maxWidth: .infinity) }
+                        else { Label(usesAppleIntelligence ? "Refine Titles with Apple Intelligence" : "Interpret Again", systemImage: "sparkles").frame(maxWidth: .infinity) }
                     }
-                    .buttonStyle(.borderedProminent).controlSize(.large)
-                    .keyboardShortcut(.return, modifiers: .command)
+                    .controlSize(.large)
+                    .keyboardShortcut(.return, modifiers: [.command, .option])
+                    .help("The preview updates as you type using the on-device parser. Refining also checks titles with Apple Intelligence when it is available.")
                     .disabled(input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isInterpreting)
                 }
                 .padding(20).frame(minWidth: 330, idealWidth: 390)
@@ -325,7 +229,8 @@ struct QuickAddView: View {
                             .font(.caption).foregroundStyle(.secondary)
                         Spacer()
                         Button("Add \(drafts.filter(\.isIncluded).count) Item\(drafts.filter(\.isIncluded).count == 1 ? "" : "s")") { confirmImport() }
-                            .buttonStyle(.borderedProminent).keyboardShortcut(.defaultAction)
+                            .buttonStyle(.borderedProminent).keyboardShortcut(.return, modifiers: .command)
+                            .help("Add the selected items (Command-Return)")
                             .disabled(drafts.allSatisfy { !$0.isIncluded } || isInterpreting)
                     }
                 }
@@ -333,26 +238,75 @@ struct QuickAddView: View {
             }
         }
         .frame(minWidth: 900, minHeight: 590)
-        .onAppear { inputFocused = true }
-        .onDisappear { interpretationTask?.cancel(); interpretationTask = nil }
+        .onAppear { inputFocused = true; updateEngineNote() }
+        .onChange(of: usesAppleIntelligence) { _, _ in if drafts.isEmpty { updateEngineNote() } }
+        .onDisappear { interpretationTask?.cancel(); interpretationTask = nil; liveParse?.cancel() }
         .onChange(of: mode) { _, value in if value == .schedule { drafts = NaturalLanguageTaskParser.suggestedSchedule(for: drafts, data: store.data) } }
+        .onChange(of: input) { _, value in scheduleLivePreview(value) }
+    }
+
+    /// Text previews update as you type with the fast on-device parser, so a
+    /// single line needs no extra step: type, check the preview, Command-Return.
+    private func scheduleLivePreview(_ value: String) {
+        liveParse?.cancel()
+        let text = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { if imageName == nil { drafts = [] }; return }
+        liveParse = Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(220))
+            guard !Task.isCancelled, !isInterpreting else { return }
+            var interpreted = NaturalLanguageTaskParser.parse(text, data: store.data)
+            if let initialDay {
+                for index in interpreted.indices where interpreted[index].targetDay == nil { interpreted[index].targetDay = initialDay }
+                if interpreted.count == 1, interpreted[0].startMinutes == nil { interpreted[0].startMinutes = initialStartMinutes }
+            }
+            imageName = nil
+            drafts = mode == .schedule ? NaturalLanguageTaskParser.suggestedSchedule(for: interpreted, data: store.data) : interpreted
+            note = "Preview from the on-device parser. Check it, then press Command-Return."
+        }
+    }
+
+    private func updateEngineNote() {
+        note = CaptureIntelligence.availabilityDescription(useAppleIntelligence: usesAppleIntelligence)
     }
 
     private func interpret() {
         let text = input.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
-        isInterpreting = true; errorText = nil
+        imageName = nil
+        preparePreview { data, useAI in
+            await CaptureIntelligence.interpret(text: text, data: data, useAppleIntelligence: useAI)
+        }
+    }
+
+    private func preparePreview(_ operation: @escaping @MainActor (LifeBoardData, Bool) async throws -> CaptureInterpretation) {
         interpretationTask?.cancel()
+        isInterpreting = true
+        errorText = nil
+        drafts = []
+        let data = store.data
+        let useAI = usesAppleIntelligence
+        note = "Preparing your preview…"
         interpretationTask = Task {
-            let result = await CaptureIntelligence.interpret(text: text, data: store.data)
-            guard !Task.isCancelled else { return }
-            var interpreted = result.drafts
-            if let initialDay {
-                for index in interpreted.indices where interpreted[index].targetDay == nil { interpreted[index].targetDay = initialDay }
-                if interpreted.count == 1 { interpreted[0].startMinutes = initialStartMinutes }
+            do {
+                let result = try await operation(data, useAI)
+                guard !Task.isCancelled else { return }
+                var interpreted = result.drafts
+                if let initialDay {
+                    for index in interpreted.indices where interpreted[index].targetDay == nil {
+                        interpreted[index].targetDay = initialDay
+                    }
+                    if interpreted.count == 1, interpreted[0].startMinutes == nil {
+                        interpreted[0].startMinutes = initialStartMinutes
+                    }
+                }
+                drafts = mode == .schedule ? NaturalLanguageTaskParser.suggestedSchedule(for: interpreted, data: store.data) : interpreted
+                note = result.note
+            } catch {
+                guard !Task.isCancelled else { return }
+                errorText = error.localizedDescription
+                updateEngineNote()
             }
-            if mode == .schedule { interpreted = NaturalLanguageTaskParser.suggestedSchedule(for: interpreted, data: store.data) }
-            drafts = interpreted; note = result.note; isInterpreting = false
+            isInterpreting = false
         }
     }
 
@@ -401,20 +355,16 @@ struct QuickAddView: View {
     }
 
     private func process(url: URL) {
-        isInterpreting = true; errorText = nil; imageName = url.lastPathComponent
-        interpretationTask?.cancel()
-        interpretationTask = Task {
-            do { let result = try await CaptureIntelligence.interpretImage(at: url, data: store.data); guard !Task.isCancelled else { return }; drafts = result.drafts; note = result.note; isInterpreting = false }
-            catch { errorText = error.localizedDescription; isInterpreting = false }
+        imageName = url.lastPathComponent
+        preparePreview { data, useAI in
+            try await CaptureIntelligence.interpretImage(at: url, data: data, useAppleIntelligence: useAI)
         }
     }
 
     private func process(image: NSImage, name: String) {
-        isInterpreting = true; errorText = nil; imageName = name
-        interpretationTask?.cancel()
-        interpretationTask = Task {
-            do { let result = try await CaptureIntelligence.interpretImage(in: image, data: store.data); guard !Task.isCancelled else { return }; drafts = result.drafts; note = result.note; isInterpreting = false }
-            catch { errorText = error.localizedDescription; isInterpreting = false }
+        imageName = name
+        preparePreview { data, useAI in
+            try await CaptureIntelligence.interpretImage(in: image, data: data, useAppleIntelligence: useAI)
         }
     }
 }
@@ -463,241 +413,9 @@ private struct CapturePreviewRow: View {
     }
 }
 
-struct TaskRow: View {
-    @EnvironmentObject private var store: AppStore
-    let task: TaskItem
-    var compact = false
-    @State private var isHovering = false
-
-    var body: some View {
-        ViewThatFits(in: .horizontal) {
-            HStack(alignment: .center, spacing: 8) {
-                completionButton
-                taskDetails.frame(minWidth: 180)
-                rowControls
-            }
-            VStack(alignment: .leading, spacing: 8) {
-                HStack(alignment: .top, spacing: 8) { completionButton; taskDetails }
-                HStack(spacing: 8) { rowControls; Spacer(minLength: 0) }.padding(.leading, 38)
-            }
-        }
-        .padding(.horizontal, 8).padding(.vertical, compact ? 5 : 8).frame(minHeight: compact ? 44 : 52)
-        .background(store.selectedTaskID == task.id ? Color.accentColor.opacity(0.14) : isHovering ? Color.primary.opacity(0.055) : Color.clear, in: RoundedRectangle(cornerRadius: 8))
-        .onHover { isHovering = $0 }
-        .onDrag { NSItemProvider(object: task.id.uuidString as NSString) }
-        .contextMenu {
-            Button("Show Details", systemImage: "info.circle") { store.selectedTaskID = task.id }
-            Button(task.isCompleted ? "Mark Incomplete" : "Complete") { store.toggleTask(task.id) }
-            Button("Start Focus…", systemImage: "timer") { store.requestFocus(task.id) }
-            Menu("Schedule") {
-                Button("Anytime") { store.moveToInbox(task.id) }
-                Button("Today, Untimed") { store.unscheduleTime(task.id, day: .today) }
-                Button("Tomorrow, Untimed") { store.unscheduleTime(task.id, day: .today.adding(days: 1)) }
-            }
-            Menu("Due") {
-                Button("Today") { store.setDueDay(task.id, day: .today) }
-                Button("Tomorrow") { store.setDueDay(task.id, day: .today.adding(days: 1)) }
-                Button("Clear Due Date") { store.setDueDay(task.id, day: nil) }.disabled(task.dueDay == nil)
-            }
-            Menu("Assign Subject") {
-                Button("None") { store.setSubject(task.id, subjectID: nil) }
-                ForEach(store.data.subjects) { subject in Button(subject.title) { store.setSubject(task.id, subjectID: subject.id) } }
-            }
-            Menu("Assign Project") {
-                Button("None") { store.setProject(task.id, projectID: nil) }
-                ForEach(store.data.projects) { project in Button(project.title) { store.setProject(task.id, projectID: project.id) } }
-            }
-            if task.scheduledStartMinutes != nil { Button("Remove Exact Time") { store.unscheduleTime(task.id) } }
-            if task.scheduledDay != nil { Button("Remove from Calendar") { store.moveToInbox(task.id) } }
-            Divider(); Button("Duplicate") { store.duplicateTask(task.id) }; Button("Archive") { store.archiveTask(task.id) }; Button("Delete", role: .destructive) { store.deleteTask(task.id) }
-        }
-    }
-
-    private var completionButton: some View {
-            Button { store.toggleTask(task.id) } label: {
-                Image(systemName: task.isCompleted ? "checkmark.circle.fill" : "circle")
-                    .font(.system(size: 18, weight: .medium)).foregroundStyle(task.isCompleted ? Color.accentColor : .secondary)
-                    .frame(width: 30, height: 30)
-            }
-            .buttonStyle(.plain).accessibilityLabel(task.isCompleted ? "Mark \(task.title) incomplete" : "Mark \(task.title) complete")
-
-    }
-    private var taskDetails: some View {
-            Button { store.selectedTaskID = task.id } label: {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(task.title).font(.body.weight(.medium)).strikethrough(task.isCompleted).foregroundStyle(task.isCompleted ? .secondary : .primary).lineLimit(compact ? 1 : 2)
-                    Text(metadata).font(.caption).foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true).lineLimit(2)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
-            }.buttonStyle(.plain).accessibilityHint("Open task details")
-
-    }
-    private var rowControls: some View {
-        HStack(spacing: 8) {
-            TaskProgressControl(task: task).frame(width: compact ? 95 : 110)
-
-            Menu {
-                Button("Today") { store.setDueDay(task.id, day: .today) }
-                Button("Tomorrow") { store.setDueDay(task.id, day: .today.adding(days: 1)) }
-                Button("Anytime") { store.setDueDay(task.id, day: nil); store.moveToInbox(task.id) }
-                Divider()
-                Button("Schedule Today, Untimed") { store.unscheduleTime(task.id, day: .today) }
-                Button("Schedule Tomorrow, Untimed") { store.unscheduleTime(task.id, day: .today.adding(days: 1)) }
-                if task.scheduledDay != nil { Button("Remove from Calendar") { store.moveToInbox(task.id) } }
-            } label: { Image(systemName: "calendar").frame(width: 30, height: 30) }
-            .menuStyle(.borderlessButton).menuIndicator(.hidden).help("Change date or scheduling")
-
-            Button { store.requestFocus(task.id) } label: { Image(systemName: "timer").frame(width: 30, height: 30) }
-                .buttonStyle(.plain).help("Start Focus")
-
-            Image(systemName: "line.3.horizontal")
-                .foregroundStyle(.tertiary).frame(width: 28, height: 30).contentShape(Rectangle())
-                .help("Drag onto Calendar")
-        }
-    }
-    private var metadata: String {
-        var parts = [String]()
-        if let association { parts.append(association) }
-        parts.append("\(task.estimatedMinutes) min")
-        if let due = task.dueDay { parts.append(due == .today ? "Due today" : "Due \(due.date().formatted(.dateTime.day().month(.abbreviated)))") }
-        if task.scheduledDay == .today, task.scheduledStartMinutes == nil { parts.append("Today") }
-        if task.priority == .high { parts.append("High priority") }
-        return parts.joined(separator: " · ")
-    }
-
-    private var association: String? {
-        if let id = task.subjectID { return store.data.subjects.first(where: { $0.id == id })?.title }
-        if let id = task.projectID { return store.data.projects.first(where: { $0.id == id })?.title }
-        return nil
-    }
-}
-
-private struct TaskProgressControl: View {
-    @EnvironmentObject private var store: AppStore
-    let task: TaskItem
-    @State private var amount = 0.0
-    var body: some View {
-        VStack(spacing: 0) {
-            Slider(value: $amount, in: 0...100, step: 5) { Text("Completion for \(task.title)") } onEditingChanged: { editing in
-                if !editing { store.setTaskProgress(task.id, percent: amount) }
-            }.labelsHidden()
-            Text("\(Int(amount))% done").font(.caption2).foregroundStyle(.secondary).monospacedDigit()
-        }
-        .onAppear { amount = task.completionPercent ?? (task.isCompleted ? 100 : 0) }
-        .onChange(of: task.completionPercent) { _, value in amount = value ?? (task.isCompleted ? 100 : 0) }
-    }
-}
-
 struct QuietEmptyState: View {
     let title: String; let detail: String; let symbol: String
     var body: some View { ContentUnavailableView { Label(title, systemImage: symbol) } description: { Text(detail) } }
-}
-
-struct TaskInspector: View {
-    @EnvironmentObject private var store: AppStore
-    let taskID: UUID
-    @State private var task = TaskItem(title: "")
-    @State private var newSubtask = ""
-    @FocusState private var checklistEntryFocused: Bool
-    @State private var baseline: TaskItem?
-    @State private var draftWarning: String?
-    @State private var hasDueDate = false
-    @State private var hasScheduledDay = false
-
-    var body: some View {
-        Form {
-            if let draftWarning { Section { Label(draftWarning, systemImage: "exclamationmark.triangle"); Button("Reload Latest Task") { refresh() } } }
-            Section("Task") { TextField("Title", text: $task.title); TextEditor(text: $task.notes).frame(minHeight: 80) }
-            Section("Completion") {
-                HStack {
-                    Slider(value: Binding(get: { task.completionPercent ?? (task.isCompleted ? 100 : 0) }, set: { task.completionPercent = $0 }), in: 0...100, step: 5).accessibilityLabel("Task completion").accessibilityValue("\(Int(task.completionPercent ?? 0)) percent")
-                    Text("\(Int(task.completionPercent ?? (task.isCompleted ? 100 : 0)))%").monospacedDigit().frame(width: 42)
-                }
-            }
-            Section("Planning") {
-                Stepper("Estimated: \(task.estimatedMinutes) min", value: $task.estimatedMinutes, in: 5...480, step: 5)
-                Picker("Priority", selection: $task.priority) { ForEach(TaskPriority.allCases) { Text($0.title).tag($0) } }
-                Toggle("Due date", isOn: $hasDueDate)
-                if hasDueDate { DatePicker("Due", selection: Binding(get: { (task.dueDay ?? .today).date() }, set: { task.dueDay = LocalDay($0) }), displayedComponents: .date) }
-                Toggle("Scheduled day", isOn: $hasScheduledDay)
-                if hasScheduledDay { DatePicker("Scheduled", selection: Binding(get: { (task.scheduledDay ?? .today).date() }, set: { task.scheduledDay = LocalDay($0) }), displayedComponents: .date) }
-                if hasScheduledDay {
-                    Toggle("Exact time", isOn: Binding(get: { task.scheduledStartMinutes != nil }, set: { task.scheduledStartMinutes = $0 ? 18 * 60 : nil; task.scheduledDurationMinutes = $0 ? task.estimatedMinutes : nil }))
-                    if task.scheduledStartMinutes != nil {
-                        DatePicker("Time", selection: Binding(get: {
-                            let minute = task.scheduledStartMinutes ?? 0
-                            return Calendar.current.date(bySettingHour: minute / 60, minute: minute % 60, second: 0, of: (task.scheduledDay ?? .today).date()) ?? .now
-                        }, set: { task.scheduledStartMinutes = Calendar.current.component(.hour, from: $0) * 60 + Calendar.current.component(.minute, from: $0) }), displayedComponents: .hourAndMinute)
-                    }
-                }
-            }
-            Section("Checklist") {
-                ForEach(Array((task.subtasks ?? []).enumerated()), id: \.element.id) { index, subtask in
-                    HStack {
-                        Toggle(subtask.title, isOn: Binding(get: { task.subtasks?[index].isCompleted ?? false }, set: { task.subtasks?[index].isCompleted = $0 }))
-                        Button("Remove", systemImage: "minus.circle") { task.subtasks?.removeAll { $0.id == subtask.id } }.labelStyle(.iconOnly).accessibilityLabel("Remove \(subtask.title)")
-                    }
-                }
-                TextField("Type a checklist item", text: $newSubtask)
-                    .textFieldStyle(.roundedBorder)
-                    .accessibilityLabel("New checklist item")
-                    .focused($checklistEntryFocused)
-                    .onSubmit(addSubtask)
-                HStack {
-                    Button("Add Checklist Item", systemImage: "plus", action: addSubtask)
-                    Spacer()
-                    Text("Return to add").font(.caption).foregroundStyle(.secondary)
-                }
-            }
-            Section("Recurrence") {
-                Picker("Repeats", selection: Binding(get: { task.recurrence?.frequency ?? "none" }, set: { task.recurrence = $0 == "none" ? nil : TaskRecurrence(frequency: $0, nextDay: task.scheduledDay ?? task.dueDay) })) {
-                    Text("Does not repeat").tag("none"); Text("Daily").tag("daily"); Text("Weekly").tag("weekly"); Text("Monthly").tag("monthly")
-                }
-                if task.recurrence != nil { Stepper("Every \(task.recurrence?.interval ?? 1) intervals", value: Binding(get: { task.recurrence?.interval ?? 1 }, set: { task.recurrence?.interval = $0 }), in: 1...365) }
-                Text("Completing this task creates the next occurrence once. Dates and checklist estimates remain editable.").font(.caption).foregroundStyle(.secondary)
-            }
-            Section("Associations") {
-                Picker("Subject", selection: $task.subjectID) { Text("None").tag(UUID?.none); ForEach(store.data.subjects) { Text($0.title).tag(UUID?.some($0.id)) } }
-                if let subjectID = task.subjectID, let subject = store.data.subjects.first(where: { $0.id == subjectID }), !subject.topics.isEmpty {
-                    Picker("Topic", selection: $task.topicID) { Text("None").tag(UUID?.none); ForEach(subject.topics) { Text($0.title).tag(UUID?.some($0.id)) } }
-                }
-                Picker("Project", selection: $task.projectID) { Text("None").tag(UUID?.none); ForEach(store.data.projects) { Text($0.title).tag(UUID?.some($0.id)) } }
-            }
-            Section { Button("Move to Inbox") { store.moveToInbox(taskID); refresh() }; Button("Delete Task", role: .destructive) { store.deleteTask(taskID) } }
-        }
-        .formStyle(.grouped).navigationTitle("Task Details")
-        .onAppear { refresh() }
-        .onChange(of: taskID) { _, _ in baseline = nil; newSubtask = ""; checklistEntryFocused = false; refresh() }
-        .onChange(of: store.data.tasks.first(where: { $0.id == taskID })) { _, incoming in
-            guard let incoming, !incoming.isArchived else { baseline = nil; store.selectedTaskID = nil; return }
-            guard let baseline, task != baseline else { refresh(); return }
-            do {
-                var before = LifeBoardData(); before.tasks = [baseline]
-                var after = LifeBoardData(); after.tasks = [task]
-                let merged = try LifeBoardDataPatch(before: before, after: after).applying(to: store.data)
-                if let current = merged.tasks.first(where: { $0.id == taskID }) { self.baseline = incoming; task = current }
-            } catch { draftWarning = "This task changed elsewhere. Review your draft or reload the latest task." }
-        }
-        .onChange(of: task) { _, edited in
-            guard let baseline, edited.id == taskID, edited != baseline else { return }
-            if store.updateTask(edited, basedOn: baseline) { refresh() }
-            else { draftWarning = "This draft has not been saved. A field is invalid or changed elsewhere." }
-        }
-        .onChange(of: hasDueDate) { _, value in if !value { task.dueDay = nil } else if task.dueDay == nil { task.dueDay = .today } }
-        .onChange(of: hasScheduledDay) { _, value in if !value { task.scheduledDay = nil; task.scheduledStartMinutes = nil; task.scheduledDurationMinutes = nil } else if task.scheduledDay == nil { task.scheduledDay = .today } }
-    }
-
-    private func addSubtask() {
-        checklistEntryFocused = true
-        let title = newSubtask.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !title.isEmpty else { return }
-        if task.subtasks == nil { task.subtasks = [] }
-        task.subtasks?.append(TaskSubtask(title: title))
-        newSubtask = ""
-    }
-
-    private func refresh() { guard let current = store.data.tasks.first(where: { $0.id == taskID && !$0.isArchived }) else { baseline = nil; store.selectedTaskID = nil; return }; baseline = current; task = current; draftWarning = nil; hasDueDate = current.dueDay != nil; hasScheduledDay = current.scheduledDay != nil }
 }
 
 struct EventInspector: View {
@@ -788,13 +506,12 @@ struct CalendarSlotCreationView: View {
         case .task:
             var task = TaskItem(title: clean); task.estimatedMinutes = duration; task.scheduledDay = slot.day; task.scheduledStartMinutes = slot.startMinutes; task.scheduledDurationMinutes = duration; task.subjectID = subjectID; task.projectID = projectID; _ = store.addTask(task)
         case .event:
-            var event = CalendarEvent(title: clean, day: slot.day, startMinutes: slot.startMinutes, endMinutes: min(24 * 60 - 1, slot.startMinutes + duration)); event.location = location; event.projectID = projectID; store.addEvent(event)
+            var event = CalendarEvent(title: clean, day: slot.day, startMinutes: slot.startMinutes, endMinutes: min(1440, slot.startMinutes + duration)); event.location = location; event.projectID = projectID; store.addEvent(event)
         }
         dismiss()
     }
 }
 
-func timeString(_ minutes: Int) -> String { String(format: "%02d:%02d", minutes / 60, minutes % 60) }
 
 extension View {
     func acceptsTaskDrop(_ action: @escaping @MainActor (UUID) -> Void) -> some View {
@@ -803,21 +520,6 @@ extension View {
             provider.loadObject(ofClass: NSString.self) { value, _ in
                 guard let raw = value as? String, let id = UUID(uuidString: raw) else { return }
                 Task { @MainActor in action(id) }
-            }
-            return true
-        }
-    }
-
-    func acceptsCalendarDrop(isTargeted: Binding<Bool>? = nil, task taskAction: @escaping @MainActor (UUID) -> Void, event eventAction: @escaping @MainActor (UUID) -> Void) -> some View {
-        onDrop(of: [UTType.plainText], isTargeted: isTargeted) { providers in
-            guard let provider = providers.first else { return false }
-            provider.loadObject(ofClass: NSString.self) { value, _ in
-                guard let raw = value as? String else { return }
-                if raw.hasPrefix("event:"), let id = UUID(uuidString: String(raw.dropFirst("event:".count))) {
-                    Task { @MainActor in eventAction(id) }
-                } else if let id = UUID(uuidString: raw) {
-                    Task { @MainActor in taskAction(id) }
-                }
             }
             return true
         }

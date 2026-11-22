@@ -1,0 +1,164 @@
+/* LifeBoard design tokens. One source for the web companion; tokens.json mirrors
+   these values for the future native (SwiftUI) client, where each maps to a
+   system colour. The palette is iOS's own: grouped backgrounds, label colours,
+   one accent for actions and selection, orange for the present moment (now
+   line, Now/Next, Focus) and red for overdue and destructive. Every text
+   colour keeps 4.5:1 or better on the surfaces it sits on. */
+:root {
+  color-scheme: light dark;
+
+  /* Colour: light appearance */
+  --lb-ink: #000000;            /* label */
+  --lb-ink-2: #66666A;          /* secondary label: 5.7:1 on surface, 5.1:1 on bg */
+  --lb-ink-3: #8A8A8E;          /* placeholders and disabled only */
+  --lb-bg: #F2F2F7;             /* grouped background */
+  --lb-surface: #FFFFFF;        /* grouped rows and cards */
+  --lb-surface-2: #E3E3E8;      /* segmented track, chips, secondary buttons */
+  --lb-fill: #EBEBF0;           /* value pills and buttons inside rows */
+  --lb-track: #DCDCE1;          /* slider and progress tracks */
+  --lb-sheet: #F2F2F7;          /* sheet background */
+  --lb-sheet-surface: #FFFFFF;  /* rows inside sheets */
+  --lb-separator: #C6C6C8;      /* hairlines between rows */
+  --lb-border: #8E8E93;         /* unchecked circles and field outlines: 3.3:1 */
+  --lb-accent: #0066DB;         /* actions, selection, your To Dos: 5.4:1 on surface */
+  --lb-on-accent: #FFFFFF;
+  --lb-accent-solid: #0066DB;   /* filled buttons and checks: white text 5.4:1 */
+  --lb-on-bright: #000000;      /* text on the bright green and orange Focus buttons */
+  --lb-accent-fill: #E3EEFC;    /* selected chips, To Do blocks */
+  --lb-signal: #D70015;         /* overdue and destructive: 5.4:1 on surface */
+  --lb-signal-fill: #FDE8EA;
+  --lb-lamp: #B35300;           /* present moment, text: 5.1:1 on surface */
+  --lb-lamp-glow: #FF9500;      /* present moment, lines, rings and dots */
+  --lb-lamp-fill: #FFF3E3;
+  --lb-event: #AF52DE;          /* events made in LifeBoard (bars and fills) */
+  --lb-event-fill: #F5EAFB;
+  --lb-connected: #30B0C7;      /* connected calendars (bars and fills) */
+  --lb-connected-fill: #E4F5F8;
+  --lb-marker: #FF2D55;         /* important dates and milestones (icons) */
+  --lb-done: #34C759;           /* completed counts and Focus start */
+  --lb-icon-gray: #8E8E93;      /* neutral icon tiles */
+  --lb-scrim: rgb(0 0 0 / 0.32);
+  --lb-bar: rgb(249 249 249 / 0.8);   /* translucent navigation and tab bars */
+  --lb-bar-edge: rgb(0 0 0 / 0.12);
+  --lb-shadow: rgb(0 0 0 / 0.12);
+  --lb-toast: #2C2C2E;
+  --lb-on-toast: #FFFFFF;
+  --lb-toast-action: #6CB6FF;
+
+  /* Type: the system face; the root follows iOS Dynamic Type through -apple-system-body. */
+  --lb-font-text: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, "Segoe UI", Roboto, sans-serif;
+  --lb-font-rounded: ui-rounded, "SF Pro Rounded", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  --lb-font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --lb-size-large-title: 2rem;      /* 34 at the default 17pt body */
+  --lb-size-title: 1.375rem;        /* 22 */
+  --lb-size-title-3: 1.25rem;       /* 20 */
+  --lb-size-headline: 1rem;         /* 17, semibold */
+  --lb-size-body: 1rem;             /* 17 */
+  --lb-size-callout: 0.9375rem;     /* 16 */
+  --lb-size-subhead: 0.875rem;      /* 15 */
+  --lb-size-footnote: 0.8125rem;    /* 13 */
+  --lb-size-caption: 0.75rem;       /* 12 */
+  --lb-size-tab: 10px;              /* tab labels stay fixed, like the system bar */
+  --lb-weight-regular: 400;
+  --lb-weight-medium: 500;
+  --lb-weight-semibold: 600;
+  --lb-weight-bold: 700;
+
+  /* Space: a 4pt grid; 16pt content margins on phones. */
+  --lb-space-1: 4px;
+  --lb-space-2: 8px;
+  --lb-space-3: 12px;
+  --lb-space-4: 16px;
+  --lb-space-5: 20px;
+  --lb-space-6: 24px;
+  --lb-space-8: 32px;
+  --lb-space-10: 40px;
+  --lb-gutter: 16px;
+  --lb-target: 44px;               /* minimum touch target */
+  --lb-hour: 60px;                 /* calendar: one minute per pixel */
+
+  /* Radius by nesting level. */
+  --lb-radius-group: 14px;         /* grouped list sections and cards */
+  --lb-radius-control: 12px;       /* fields and small buttons */
+  --lb-radius-block: 6px;          /* calendar blocks */
+  --lb-radius-sheet: 22px;
+  --lb-radius-tile: 7px;           /* icon tiles */
+  --lb-radius-pill: 999px;
+
+  /* Motion: state, never decoration. */
+  --lb-dur-micro: 120ms;
+  --lb-dur-short: 180ms;
+  --lb-dur-sheet-in: 300ms;
+  --lb-dur-sheet-out: 150ms;
+  --lb-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --lb-ease-in: cubic-bezier(0.7, 0, 0.84, 0);
+  --lb-ease-move: cubic-bezier(0.65, 0, 0.35, 1);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --lb-ink: #FFFFFF;
+    --lb-ink-2: #98989F;
+    --lb-ink-3: #6E6E73;
+    --lb-bg: #000000;
+    --lb-surface: #1C1C1E;
+    --lb-surface-2: #2C2C2E;
+    --lb-fill: #3A3A3C;
+    --lb-track: #48484A;
+    --lb-sheet: #1C1C1E;
+    --lb-sheet-surface: #2C2C2E;
+    --lb-separator: #38383A;
+    --lb-border: #7C7C80;
+    --lb-accent: #0A84FF;
+    --lb-on-accent: #FFFFFF;
+    --lb-accent-solid: #0062D6;
+    --lb-on-bright: #000000;
+    --lb-accent-fill: #0B2A4D;
+    --lb-signal: #FF6961;
+    --lb-signal-fill: #3B1517;
+    --lb-lamp: #FFB340;
+    --lb-lamp-glow: #FF9F0A;
+    --lb-lamp-fill: #33230A;
+    --lb-event: #BF5AF2;
+    --lb-event-fill: #2E1A3A;
+    --lb-connected: #40CBE0;
+    --lb-connected-fill: #10303A;
+    --lb-marker: #FF375F;
+    --lb-done: #30D158;
+    --lb-icon-gray: #636366;
+    --lb-scrim: rgb(0 0 0 / 0.56);
+    --lb-bar: rgb(22 22 24 / 0.78);
+    --lb-bar-edge: rgb(255 255 255 / 0.1);
+    --lb-shadow: rgb(0 0 0 / 0.5);
+    --lb-toast: #E5E5EA;
+    --lb-on-toast: #000000;
+    --lb-toast-action: #0058C2;
+  }
+}
+
+@media (prefers-contrast: more) {
+  :root {
+    --lb-ink-2: #48484A;
+    --lb-ink-3: #6C6C70;
+    --lb-separator: #8E8E93;
+    --lb-border: #6C6C70;
+    --lb-accent: #0040DD;
+    --lb-accent-solid: #0040DD;
+    --lb-signal: #A5000F;
+    --lb-lamp: #8A3F00;
+    --lb-bar: #F9F9F9;
+  }
+}
+@media (prefers-contrast: more) and (prefers-color-scheme: dark) {
+  :root {
+    --lb-ink-2: #D1D1D6;
+    --lb-ink-3: #AEAEB2;
+    --lb-separator: #636366;
+    --lb-border: #AEAEB2;
+    --lb-accent: #409CFF;
+    --lb-accent-solid: #0050C0;
+    --lb-signal: #FF8E87;
+    --lb-lamp: #FFC870;
+    --lb-bar: #161618;
+  }
+}

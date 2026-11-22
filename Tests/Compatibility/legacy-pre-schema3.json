@@ -1,0 +1,585 @@
+{
+  "activity": [
+    {
+      "date": "2026-11-22T10:47:03.850909948Z",
+      "id": "F7604BFA-54EF-4952-868F-89B7EA084C58",
+      "kind": "taskCompleted",
+      "subjectID": "B39DFF03-0112-4E2A-9BE2-46DB93BD73D2",
+      "title": "Completed \"Hand in physics practical write-up\""
+    },
+    {
+      "date": "2026-11-22T10:46:20.641006947Z",
+      "id": "6E1196F1-2D76-4EFD-8FDC-E08F49BA1151",
+      "kind": "taskCompleted",
+      "title": "Completed \"Pack PE kit\""
+    }
+  ],
+  "events": [
+    {
+      "day": {
+        "day": 23,
+        "month": 11,
+        "year": 2026
+      },
+      "endMinutes": 1050,
+      "id": "E0D61DA5-6977-4A71-9416-5367B921BFD3",
+      "location": "Studio",
+      "notes": "",
+      "startMinutes": 960,
+      "title": "Drama rehearsal"
+    },
+    {
+      "day": {
+        "day": 25,
+        "month": 11,
+        "year": 2026
+      },
+      "endMinutes": 1140,
+      "id": "7808E67A-2707-4769-A68F-692CBA0EB9A4",
+      "location": "",
+      "notes": "",
+      "startMinutes": 1080,
+      "title": "Revision group"
+    }
+  ],
+  "projects": [
+    {
+      "colour": "indigo",
+      "health": 3,
+      "id": "A8E88F02-AAF5-4AE2-B2B3-220CC1D332DF",
+      "milestones": [
+        {
+          "id": "B6219A1A-F633-4782-8E4C-EB1EDC47F041",
+          "isCompleted": false,
+          "notes": "",
+          "targetDay": {
+            "day": 27,
+            "month": 11,
+            "year": 2026
+          },
+          "title": "Coursework draft"
+        }
+      ],
+      "notes": "",
+      "progress": 0,
+      "progressHistory": [],
+      "status": "active",
+      "summary": "",
+      "title": "Coursework",
+      "updates": []
+    },
+    {
+      "colour": "indigo",
+      "health": 3,
+      "id": "DDEAC49C-18B0-4E96-9EC9-CCDDCEF364D5",
+      "milestones": [],
+      "notes": "",
+      "progress": 0,
+      "progressHistory": [],
+      "status": "active",
+      "summary": "",
+      "title": "Personal Project",
+      "updates": []
+    },
+    {
+      "colour": "indigo",
+      "health": 3,
+      "id": "DC839E72-0810-4F4A-963A-1CCC3B5382EB",
+      "milestones": [],
+      "notes": "",
+      "progress": 0,
+      "progressHistory": [],
+      "status": "active",
+      "summary": "",
+      "title": "Creative Project",
+      "updates": []
+    },
+    {
+      "colour": "indigo",
+      "health": 3,
+      "id": "0A4923FD-DFC4-4CFB-B4DB-EBF78FBD1EB2",
+      "milestones": [],
+      "notes": "",
+      "progress": 0,
+      "progressHistory": [],
+      "status": "active",
+      "summary": "",
+      "title": "Team Project",
+      "updates": []
+    }
+  ],
+  "settings": {
+    "academicYearStartMonth": 9,
+    "breakMinutes": 10,
+    "defaultTaskMinutes": 30,
+    "eveningEndMinutes": 1320,
+    "eveningStartMinutes": 1020,
+    "hasCompletedOnboarding": true,
+    "maxFocusMinutes": 50,
+    "weekStartsMonday": true
+  },
+  "subjects": [
+    {
+      "archived": false,
+      "colour": "blue",
+      "confidence": 3,
+      "confidenceHistory": [],
+      "id": "885C9923-61BE-40D4-8C75-3593385D5647",
+      "notes": "",
+      "progress": 0,
+      "title": "Mathematics",
+      "topics": [
+        {
+          "confidence": 3,
+          "id": "C40EE026-4CBC-4E40-B67C-C6AA0D262B41",
+          "notes": "",
+          "progress": 0,
+          "title": "Quadratics"
+        },
+        {
+          "confidence": 3,
+          "id": "35E26449-D56B-4A36-81B9-DF03719A1200",
+          "notes": "",
+          "progress": 0,
+          "title": "Vectors"
+        },
+        {
+          "confidence": 3,
+          "id": "534C1FE9-91F1-44C4-BE72-15EE8E8FF989",
+          "notes": "",
+          "progress": 0,
+          "title": "Probability"
+        }
+      ]
+    },
+    {
+      "archived": false,
+      "colour": "orange",
+      "confidence": 3,
+      "confidenceHistory": [],
+      "id": "205B4144-49EC-46D5-B532-F2C6BF7014DF",
+      "notes": "",
+      "progress": 0,
+      "title": "English Literature",
+      "topics": []
+    },
+    {
+      "archived": false,
+      "colour": "pink",
+      "confidence": 3,
+      "confidenceHistory": [],
+      "id": "CC6CBD65-D3FB-4981-9187-AF598F4DD879",
+      "notes": "",
+      "progress": 0,
+      "title": "English Language",
+      "topics": []
+    },
+    {
+      "archived": false,
+      "colour": "green",
+      "confidence": 3,
+      "confidenceHistory": [],
+      "id": "16D897ED-F236-4A99-87DF-A42DDC4D74AA",
+      "notes": "",
+      "progress": 0,
+      "title": "Biology",
+      "topics": []
+    },
+    {
+      "archived": false,
+      "colour": "teal",
+      "confidence": 3,
+      "confidenceHistory": [],
+      "id": "E283A99C-9123-467F-80D0-7ADA23F2DADE",
+      "notes": "",
+      "progress": 0,
+      "title": "Chemistry",
+      "topics": [
+        {
+          "confidence": 3,
+          "id": "FAFC196E-1B69-4E27-860B-DD260D06297F",
+          "notes": "",
+          "progress": 0,
+          "title": "Rates of reaction"
+        },
+        {
+          "confidence": 3,
+          "id": "B3CE5AB1-C968-4132-AC13-9C4BA6F17E0C",
+          "notes": "",
+          "progress": 0,
+          "title": "Organic chemistry"
+        }
+      ]
+    },
+    {
+      "archived": false,
+      "colour": "indigo",
+      "confidence": 3,
+      "confidenceHistory": [],
+      "id": "B39DFF03-0112-4E2A-9BE2-46DB93BD73D2",
+      "lastActivity": "2026-11-22T10:47:03.850916028Z",
+      "notes": "",
+      "progress": 0,
+      "title": "Physics",
+      "topics": []
+    },
+    {
+      "archived": false,
+      "colour": "purple",
+      "confidence": 3,
+      "confidenceHistory": [],
+      "id": "750A6A80-4816-44B6-A251-B8DA82BCE9C2",
+      "notes": "",
+      "progress": 0,
+      "title": "Drama",
+      "topics": []
+    },
+    {
+      "archived": false,
+      "colour": "brown",
+      "confidence": 3,
+      "confidenceHistory": [],
+      "id": "7929AC6B-65BD-4E7B-8A99-2E172D89B251",
+      "notes": "",
+      "progress": 0,
+      "title": "History",
+      "topics": []
+    },
+    {
+      "archived": false,
+      "colour": "mint",
+      "confidence": 3,
+      "confidenceHistory": [],
+      "id": "FE22A3F7-CF7E-46E4-A390-24BF437FC375",
+      "notes": "",
+      "progress": 0,
+      "title": "Geography",
+      "topics": []
+    }
+  ],
+  "tasks": [
+    {
+      "completedAt": "2026-11-22T10:47:03.850885034Z",
+      "createdAt": "2026-11-22T10:46:20.640177965Z",
+      "dueDay": {
+        "day": 21,
+        "month": 11,
+        "year": 2026
+      },
+      "estimatedMinutes": 20,
+      "id": "470FC836-D4A3-4A70-BD2E-A426FEF7A64D",
+      "isArchived": false,
+      "isCompleted": true,
+      "modifiedAt": "2026-11-22T10:47:03.850885034Z",
+      "notes": "",
+      "priority": "none",
+      "sortOrder": 0,
+      "subjectID": "B39DFF03-0112-4E2A-9BE2-46DB93BD73D2",
+      "tags": [],
+      "title": "Hand in physics practical write-up"
+    },
+    {
+      "createdAt": "2026-11-22T10:46:20.640179992Z",
+      "estimatedMinutes": 35,
+      "id": "ABC4F085-AE3D-4DEC-9FC3-EAB7D8B748F5",
+      "isArchived": false,
+      "isCompleted": false,
+      "modifiedAt": "2026-11-22T10:46:20.640179992Z",
+      "notes": "",
+      "priority": "none",
+      "scheduledDay": {
+        "day": 21,
+        "month": 11,
+        "year": 2026
+      },
+      "sortOrder": 0,
+      "subjectID": "885C9923-61BE-40D4-8C75-3593385D5647",
+      "tags": [],
+      "title": "Maths homework: vectors exercise 5B"
+    },
+    {
+      "createdAt": "2026-11-22T10:46:20.640154004Z",
+      "dueDay": {
+        "day": 23,
+        "month": 11,
+        "year": 2026
+      },
+      "estimatedMinutes": 40,
+      "id": "94FF4BDB-8CB0-479F-BD7B-477CBAAA226D",
+      "isArchived": false,
+      "isCompleted": false,
+      "modifiedAt": "2026-11-22T10:46:20.640154004Z",
+      "notes": "",
+      "priority": "none",
+      "scheduledDay": {
+        "day": 22,
+        "month": 11,
+        "year": 2026
+      },
+      "sortOrder": 0,
+      "subjectID": "E283A99C-9123-467F-80D0-7ADA23F2DADE",
+      "tags": [],
+      "title": "Chemistry worksheet: rates of reaction"
+    },
+    {
+      "createdAt": "2026-11-22T10:46:20.640172958Z",
+      "estimatedMinutes": 15,
+      "id": "975D30FD-0623-4D12-9ABD-4F8EBA5F5A6F",
+      "isArchived": false,
+      "isCompleted": false,
+      "modifiedAt": "2026-11-22T10:46:20.640172958Z",
+      "notes": "",
+      "priority": "none",
+      "scheduledDay": {
+        "day": 22,
+        "month": 11,
+        "year": 2026
+      },
+      "sortOrder": 0,
+      "tags": [],
+      "title": "Spanish vocabulary review"
+    },
+    {
+      "createdAt": "2026-11-22T10:46:20.640174031Z",
+      "estimatedMinutes": 30,
+      "id": "B64196A2-B47D-4D1E-9991-2E458A209F66",
+      "isArchived": false,
+      "isCompleted": false,
+      "modifiedAt": "2026-11-22T10:46:20.640174031Z",
+      "notes": "",
+      "priority": "none",
+      "scheduledDay": {
+        "day": 22,
+        "month": 11,
+        "year": 2026
+      },
+      "sortOrder": 0,
+      "subjectID": "7929AC6B-65BD-4E7B-8A99-2E172D89B251",
+      "tags": [],
+      "title": "Read history chapter 4"
+    },
+    {
+      "createdAt": "2026-11-22T10:46:20.640182018Z",
+      "estimatedMinutes": 45,
+      "id": "02C90961-7E5A-43FB-BEC2-F4DF76FCF59F",
+      "isArchived": false,
+      "isCompleted": false,
+      "modifiedAt": "2026-11-22T10:46:20.640182018Z",
+      "notes": "",
+      "priority": "none",
+      "scheduledDay": {
+        "day": 22,
+        "month": 11,
+        "year": 2026
+      },
+      "scheduledStartMinutes": 1050,
+      "sortOrder": 0,
+      "subjectID": "885C9923-61BE-40D4-8C75-3593385D5647",
+      "tags": [],
+      "title": "Past paper question: probability"
+    },
+    {
+      "createdAt": "2026-11-22T10:46:20.640184045Z",
+      "estimatedMinutes": 25,
+      "id": "3D05C65B-25D4-437B-A5D9-B7F4D5A7D0E4",
+      "isArchived": false,
+      "isCompleted": false,
+      "modifiedAt": "2026-11-22T10:46:20.640184045Z",
+      "notes": "",
+      "priority": "none",
+      "scheduledDay": {
+        "day": 22,
+        "month": 11,
+        "year": 2026
+      },
+      "scheduledStartMinutes": 1140,
+      "sortOrder": 0,
+      "subjectID": "E283A99C-9123-467F-80D0-7ADA23F2DADE",
+      "tags": [],
+      "title": "Revise organic chemistry flashcards"
+    },
+    {
+      "createdAt": "2026-11-22T10:46:20.640169978Z",
+      "dueDay": {
+        "day": 25,
+        "month": 11,
+        "year": 2026
+      },
+      "estimatedMinutes": 45,
+      "id": "3A884729-5514-4A32-90B0-EED4B4524980",
+      "isArchived": false,
+      "isCompleted": false,
+      "modifiedAt": "2026-11-22T10:46:20.640169978Z",
+      "notes": "Theme: ambition in Macbeth. Three paragraphs, quotes from Acts 1 and 3.",
+      "priority": "high",
+      "sortOrder": 0,
+      "subjectID": "205B4144-49EC-46D5-B532-F2C6BF7014DF",
+      "tags": [],
+      "title": "English essay plan"
+    },
+    {
+      "createdAt": "2026-11-22T10:46:20.640184999Z",
+      "estimatedMinutes": 5,
+      "id": "3B0199A7-B84E-4951-91A9-F366DD2D9688",
+      "isArchived": false,
+      "isCompleted": false,
+      "modifiedAt": "2026-11-22T10:46:20.640184999Z",
+      "notes": "",
+      "priority": "none",
+      "scheduledDay": {
+        "day": 23,
+        "month": 11,
+        "year": 2026
+      },
+      "sortOrder": 0,
+      "tags": [],
+      "title": "Book a library study room"
+    },
+    {
+      "createdAt": "2026-11-22T10:46:20.640187025Z",
+      "estimatedMinutes": 10,
+      "id": "08656EC4-B4E7-4316-BD97-09EB4783B921",
+      "isArchived": false,
+      "isCompleted": false,
+      "modifiedAt": "2026-11-22T10:46:20.640187025Z",
+      "notes": "",
+      "priority": "none",
+      "scheduledDay": {
+        "day": 24,
+        "month": 11,
+        "year": 2026
+      },
+      "sortOrder": 0,
+      "tags": [],
+      "title": "Print coursework sources"
+    },
+    {
+      "createdAt": "2026-11-22T10:46:20.640189052Z",
+      "dueDay": {
+        "day": 28,
+        "month": 11,
+        "year": 2026
+      },
+      "estimatedMinutes": 40,
+      "id": "1878D48E-8D92-467E-8BF6-DB12A11347BD",
+      "isArchived": false,
+      "isCompleted": false,
+      "modifiedAt": "2026-11-22T10:46:20.640189052Z",
+      "notes": "",
+      "priority": "none",
+      "sortOrder": 0,
+      "subjectID": "16D897ED-F236-4A99-87DF-A42DDC4D74AA",
+      "tags": [],
+      "title": "Biology mind map"
+    },
+    {
+      "createdAt": "2026-11-22T10:46:20.640190005Z",
+      "estimatedMinutes": 20,
+      "id": "745B61F2-75E4-42E2-94D1-37BFF89BFAC9",
+      "isArchived": false,
+      "isCompleted": false,
+      "modifiedAt": "2026-11-22T10:46:20.640190005Z",
+      "notes": "",
+      "priority": "none",
+      "sortOrder": 0,
+      "tags": [],
+      "title": "Tidy revision folder"
+    },
+    {
+      "createdAt": "2026-11-22T10:46:20.640190959Z",
+      "estimatedMinutes": 5,
+      "id": "BC8EC21A-B4C8-4E48-B02E-B81632AA2C2B",
+      "isArchived": false,
+      "isCompleted": false,
+      "modifiedAt": "2026-11-22T10:46:20.640190959Z",
+      "notes": "",
+      "priority": "none",
+      "sortOrder": 0,
+      "tags": [],
+      "title": "Email drama teacher about rehearsal"
+    },
+    {
+      "createdAt": "2026-11-22T10:46:20.640190959Z",
+      "estimatedMinutes": 30,
+      "id": "6482D98A-844C-4CD2-973D-847874EB54B6",
+      "isArchived": false,
+      "isCompleted": false,
+      "modifiedAt": "2026-11-22T10:46:20.640190959Z",
+      "notes": "",
+      "priority": "low",
+      "sortOrder": 0,
+      "tags": [],
+      "title": "Look at university open days"
+    },
+    {
+      "completedAt": "2026-11-22T10:16:20.640190959Z",
+      "createdAt": "2026-11-22T10:46:20.640190959Z",
+      "estimatedMinutes": 20,
+      "id": "F7CF6DAC-17B5-4884-9D9F-A43946D0E7BE",
+      "isArchived": false,
+      "isCompleted": true,
+      "modifiedAt": "2026-11-22T10:46:20.640190959Z",
+      "notes": "",
+      "priority": "none",
+      "scheduledDay": {
+        "day": 22,
+        "month": 11,
+        "year": 2026
+      },
+      "sortOrder": 0,
+      "tags": [],
+      "title": "French listening practice"
+    },
+    {
+      "completedAt": "2026-11-22T10:16:20.640192032Z",
+      "createdAt": "2026-11-22T10:46:20.640192032Z",
+      "estimatedMinutes": 5,
+      "id": "8DA5A12A-2E42-463F-9615-C9FDFB6D81FD",
+      "isArchived": false,
+      "isCompleted": true,
+      "modifiedAt": "2026-11-22T10:46:20.640192032Z",
+      "notes": "",
+      "priority": "none",
+      "scheduledDay": {
+        "day": 22,
+        "month": 11,
+        "year": 2026
+      },
+      "sortOrder": 0,
+      "tags": [],
+      "title": "Pack PE kit"
+    }
+  ],
+  "yearMarkers": [
+    {
+      "category": "Test",
+      "colour": "orange",
+      "id": "80BB9C57-05AB-4C06-B1C1-231563678F6F",
+      "notes": "",
+      "startDay": {
+        "day": 28,
+        "month": 11,
+        "year": 2026
+      },
+      "subjectID": "E283A99C-9123-467F-80D0-7ADA23F2DADE",
+      "title": "Chemistry test"
+    },
+    {
+      "category": "Test",
+      "colour": "orange",
+      "endDay": {
+        "day": 31,
+        "month": 12,
+        "year": 2026
+      },
+      "id": "6D77291C-2C75-4EA0-9C45-BEC15CDD1DAE",
+      "notes": "",
+      "startDay": {
+        "day": 22,
+        "month": 12,
+        "year": 2026
+      },
+      "title": "Mock exams"
+    }
+  ]
+}

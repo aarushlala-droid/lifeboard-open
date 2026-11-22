@@ -67,14 +67,14 @@ async function edit(page, title, nextTitle, notes) {
   if (nextTitle) await waitDurableTitle(page, nextTitle);
 }
 async function add(page, title) {
-  await page.getByRole('button', { name: '＋ Add To Do', exact: true }).click();
+  await page.getByRole('button', { name: 'Add To Do', exact: true }).click();
   await page.getByLabel('Title', { exact: true }).fill(title);
-  await page.getByRole('button', { name: 'Save', exact: true }).click();
+  await page.getByRole('button', { name: 'Add', exact: true }).click();
   await synced(page);
   assert.ok((await snapshot()).data.tasks.some(task => task.title === title));
 }
 async function syncCentre(page) {
-  await page.getByRole('button', { name: 'More', exact: true }).click();
+  await page.getByRole('button', { name: 'Browse', exact: true }).click();
   await page.getByRole('button', { name: /Settings/ }).click();
   await page.getByRole('button', { name: 'Open Sync Centre', exact: true }).click();
   await page.getByRole('heading', { name: 'Sync Centre', exact: true }).waitFor();

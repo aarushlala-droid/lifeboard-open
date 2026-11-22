@@ -2,13 +2,60 @@ import AppKit
 import Combine
 import Foundation
 import LifeBoardCore
+import SwiftUI
 #if canImport(WidgetKit)
 import WidgetKit
 #endif
 
+enum CalendarDragItem: Equatable {
+    case task(UUID)
+    case event(UUID)
+
+    var payload: String {
+        switch self {
+        case .task(let id): id.uuidString
+        case .event(let id): "event:\(id.uuidString)"
+        }
+    }
+}
+
+enum CalendarFileLink {
+    static func isLocal(_ url: URL) -> Bool {
+        url.isFileURL && url.path.hasPrefix("/") && (url.host?.isEmpty != false || url.host == "localhost") && !url.lastPathComponent.isEmpty
+    }
+
+    static func urls(in notes: String) -> [URL] {
+        notes.split(whereSeparator: \.isNewline).compactMap { line in
+            guard let url = URL(string: String(line)), isLocal(url) else { return nil }
+            return url
+        }
+    }
+}
+
 @MainActor
 final class AppStore: ObservableObject {
-    @Published private(set) var data: LifeBoardData
+    @Published private(set) var data: LifeBoardData {
+        didSet { index = PlannerIndex(data: data); scheduleFocusCompletion() }
+    }
+    /// Derived lookups for the views; rebuilt with every data change.
+    private(set) var index: PlannerIndex
+    /// Tasks completed a moment ago keep their place briefly (see PlannerIndex).
+    @Published private(set) var lingeringCompletions: Set<UUID> = []
+    /// The inspector registers its unsaved text here so quitting or switching
+    /// tasks never loses a debounced edit.
+    var pendingDraftFlush: (() -> Void)?
+    /// UI requests raised by menu commands and observed by the window.
+    @Published var rescheduleRequest: UUID?
+    @Published var newTaskFocusRequest = 0
+    @Published var inspectorFocusRequest = 0
+    var revealInspectorOnSelect = false
+    var inspectorFocusPending = false
+    private var directoryWatcher: DispatchSourceFileSystemObject?
+    private var housekeepingTimer: Timer?
+    private var syncTimer: Timer?
+    private var focusTimer: Timer?
+    private var scheduledFocusID: UUID?
+    private var observers: [NSObjectProtocol] = []
     @Published var selectedTaskID: UUID? { didSet { if selectedTaskID != nil { selectedEventID = nil } } }
     @Published var selectedEventID: UUID? { didSet { if selectedEventID != nil { selectedTaskID = nil } } }
     @Published var message: UserMessage?
@@ -27,6 +74,8 @@ final class AppStore: ObservableObject {
     let repository: LifeBoardRepository
     private let calendarIntegration = CalendarIntegrationService()
     weak var undoManager: UndoManager?
+    var calendarDrag: CalendarDragItem?
+    var calendarScrollOffsets: [String: CGFloat] = [:]
     private var fileModificationDate: Date?
     private var lastICloudAttempt: Date?
     private var persistenceReadOnly = false
@@ -47,14 +96,20 @@ final class AppStore: ObservableObject {
 
     init(repository: LifeBoardRepository = LifeBoardRepository()) {
         self.repository = repository
+        var loaded = LifeBoardData()
+        var loadError: Error?
         do {
-            self.data = try repository.loadThrowing()
+            loaded = try repository.loadThrowing()
         } catch {
             // A damaged or temporarily unreadable file must never be replaced
             // with a freshly seeded workspace on the next user action.
-            self.data = LifeBoardData()
+            loadError = error
+        }
+        self.data = loaded
+        self.index = PlannerIndex(data: loaded)
+        if let loadError {
             self.persistenceReadOnly = true
-            self.message = UserMessage(title: "LifeBoard Data Unavailable", detail: "Your existing data could not be read. LifeBoard has paused changes to protect it. " + error.localizedDescription)
+            self.message = UserMessage(title: "LifeBoard Data Unavailable", detail: "Your existing data could not be read. LifeBoard has paused changes to protect it. " + loadError.localizedDescription)
         }
         if !persistenceReadOnly {
             let preferencesURL = repository.fileURL.deletingLastPathComponent().appendingPathComponent("DevicePreferences.json")
@@ -71,6 +126,104 @@ final class AppStore: ObservableObject {
         calendarIntegration.onChange = { [weak self] in self?.refreshConnectedCalendarsIfNeeded(force: true) }
         refreshConnectedCalendarsIfNeeded(force: true)
         if SyncService.endpoint() != nil { syncStatus = "Connecting mobile…" }
+        if LifeBoardEnvironment.isPreview { syncStatus = "Mobile sync is off in LifeBoard Preview" }
+        index = PlannerIndex(data: data)
+    }
+
+    // MARK: Background work (event-driven; no per-second polling)
+
+    /// Starts file watching and low-frequency housekeeping. Called once by the
+    /// app; tests drive the same methods directly.
+    func startBackgroundWork() {
+        guard directoryWatcher == nil else { return }
+        watchDataDirectory()
+        housekeepingTimer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                // A slow fallback in case a file event is ever missed.
+                self.reloadIfChanged()
+                self.performICloudBackup()
+                self.refreshConnectedCalendarsIfNeeded()
+            }
+        }
+        housekeepingTimer?.tolerance = 10
+        if SyncService.endpoint() != nil {
+            syncTimer = Timer.scheduledTimer(withTimeInterval: 15, repeats: true) { [weak self] _ in MainActor.assumeIsolated { self?.syncTick() } }
+            syncTimer?.tolerance = 3
+            syncTick()
+        }
+        let center = NotificationCenter.default
+        observers.append(center.addObserver(forName: .NSCalendarDayChanged, object: nil, queue: .main) { [weak self] _ in MainActor.assumeIsolated { self?.temporalContextChanged() } })
+        observers.append(center.addObserver(forName: .NSSystemTimeZoneDidChange, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { NSTimeZone.resetSystemTimeZone(); self?.temporalContextChanged() }
+        })
+        observers.append(center.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.temporalContextChanged(); self?.reloadIfChanged(); self?.tickFocus() }
+        })
+        performICloudBackup()
+        scheduleFocusCompletion()
+    }
+
+    /// The date or time zone changed: rebuild "today" and every derived view.
+    func temporalContextChanged() {
+        index = PlannerIndex(data: data)
+        temporalRevision += 1
+        objectWillChange.send()
+    }
+    @Published private(set) var temporalRevision = 0
+
+    private func watchDataDirectory() {
+        let directory = repository.fileURL.deletingLastPathComponent()
+        let descriptor = open(directory.path, O_EVTONLY)
+        guard descriptor >= 0 else { return }
+        let source = DispatchSource.makeFileSystemObjectSource(fileDescriptor: descriptor, eventMask: [.write, .rename, .delete], queue: .main)
+        source.setEventHandler { [weak self] in
+            MainActor.assumeIsolated {
+                // Atomic writes by the helper or another app replace the file
+                // inside this folder; our own writes are recognised by mtime.
+                self?.reloadIfChanged()
+            }
+        }
+        source.setCancelHandler { close(descriptor) }
+        source.resume()
+        directoryWatcher = source
+    }
+
+    /// One-shot timer at the moment the active focus or break ends.
+    private func scheduleFocusCompletion() {
+        let active = data.activeFocus
+        let key = active.flatMap { $0.pausedAt == nil ? $0.id : nil }
+        guard key != scheduledFocusID else { return }
+        focusTimer?.invalidate(); focusTimer = nil; scheduledFocusID = key
+        guard let active, active.pausedAt == nil else { return }
+        let remaining = max(0.5, Double(active.plannedMinutes * 60) - active.elapsedSeconds())
+        focusTimer = Timer.scheduledTimer(withTimeInterval: remaining, repeats: false) { [weak self] _ in MainActor.assumeIsolated { self?.tickFocus() } }
+        focusTimer?.tolerance = 0.2
+    }
+
+    /// Flushes any debounced inspector edit. Called before quitting.
+    func flushPendingDrafts() {
+        let flush = pendingDraftFlush
+        pendingDraftFlush = nil
+        flush?()
+    }
+
+    // MARK: Completion
+
+    /// Completes or reopens a task. A newly completed task lingers in place for
+    /// a moment (still saved immediately) so the list never jumps under the pointer.
+    func toggleCompletion(_ id: UUID, reduceMotion: Bool = false) {
+        guard let task = data.tasks.first(where: { $0.id == id }) else { return }
+        let completing = !task.isCompleted
+        toggleTask(id)
+        guard completing, data.tasks.first(where: { $0.id == id })?.isCompleted == true else {
+            lingeringCompletions.remove(id); return
+        }
+        lingeringCompletions.insert(id)
+        DispatchQueue.main.asyncAfter(deadline: .now() + (reduceMotion ? 0.6 : 0.9)) { [weak self] in
+            guard let self, self.lingeringCompletions.contains(id) else { return }
+            withMotion(Motion.move(reduceMotion)) { _ = self.lingeringCompletions.remove(id) }
+        }
     }
 
     struct ExternalImportPreview: Identifiable { let id = UUID(); let source: String; let tasks: [TaskItem] }
@@ -91,6 +244,7 @@ final class AppStore: ObservableObject {
     @discardableResult func commit(actionName: String = "Change", _ change: (inout LifeBoardData) -> Void) -> Bool {
         let previous = data
         var next = data; change(&next)
+        guard next != previous else { return true }
         do {
             let patch = try LifeBoardDataPatch(before: previous, after: next)
             guard !patch.isEmpty else { return true }
@@ -214,6 +368,11 @@ final class AppStore: ObservableObject {
         } catch { message = UserMessage(title: "Task Changed Elsewhere", detail: "Your draft has not overwritten the newer value. " + error.localizedDescription); return false }
     }
 
+    /// Connected events use their calendar's own colour, as in Calendar.
+    func connectedColour(_ calendarID: String) -> Color {
+        calendarIntegration.colour(forCalendarID: calendarID).map { Color(nsColor: $0) } ?? LB.connected
+    }
+
     func setTaskProgress(_ id: UUID, percent: Double) {
         commit(actionName: "Change Task Progress") { value in
             guard let i = value.tasks.firstIndex(where: { $0.id == id }) else { return }
@@ -252,8 +411,40 @@ final class AppStore: ObservableObject {
         commit(actionName: "Schedule Task") { value in guard let i = value.tasks.firstIndex(where: { $0.id == id }) else { return }; value.tasks[i].scheduledDay = day; value.tasks[i].scheduledStartMinutes = startMinutes; value.tasks[i].scheduledDurationMinutes = startMinutes == nil ? nil : value.tasks[i].estimatedMinutes; value.tasks[i].modifiedAt = .now }
     }
 
-    func unscheduleTime(_ id: UUID, day: LocalDay? = nil) {
-        commit(actionName: "Unschedule Task") { value in guard let i = value.tasks.firstIndex(where: { $0.id == id }) else { return }; value.tasks[i].scheduledDay = day ?? value.tasks[i].scheduledDay; value.tasks[i].scheduledStartMinutes = nil; value.tasks[i].scheduledDurationMinutes = nil }
+    @discardableResult func moveScheduledTask(_ id: UUID, day: LocalDay, startMinutes: Int? = nil) -> Bool {
+        guard let index = data.tasks.firstIndex(where: { $0.id == id && !$0.isCompleted && !$0.isArchived }) else { return false }
+        let task = data.tasks[index]
+        let start = startMinutes ?? task.scheduledStartMinutes
+        guard task.scheduledDay != day || task.scheduledStartMinutes != start else { return true }
+        return commit(actionName: "Move Scheduled Task") { value in
+            value.tasks[index].scheduledDay = day
+            value.tasks[index].scheduledStartMinutes = start
+            if task.scheduledStartMinutes == nil, start != nil {
+                value.tasks[index].scheduledDurationMinutes = task.estimatedMinutes
+            }
+            value.tasks[index].modifiedAt = .now
+        }
+    }
+
+    @discardableResult func addCalendarFiles(_ urls: [URL], day: LocalDay, startMinutes: Int?) -> Bool {
+        guard let first = urls.first, urls.allSatisfy({ CalendarFileLink.isLocal($0) }) else { return false }
+        let title = urls.count == 1 ? first.lastPathComponent : "Review \(urls.count) files"
+        var task = TaskItem(title: title)
+        task.notes = urls.map(\.absoluteString).joined(separator: "\n")
+        task.estimatedMinutes = data.settings.defaultTaskMinutes
+        task.scheduledDay = day
+        task.scheduledStartMinutes = startMinutes
+        task.scheduledDurationMinutes = startMinutes.map { _ in task.estimatedMinutes }
+        return commit(actionName: "Schedule Files") { $0.tasks.append(task) }
+    }
+
+    @discardableResult func unscheduleTime(_ id: UUID, day: LocalDay? = nil) -> Bool {
+        guard let index = data.tasks.firstIndex(where: { $0.id == id }) else { return false }
+        return commit(actionName: "Unschedule Task") { value in
+            value.tasks[index].scheduledDay = day ?? value.tasks[index].scheduledDay
+            value.tasks[index].scheduledStartMinutes = nil
+            value.tasks[index].scheduledDurationMinutes = nil
+        }
     }
 
     func resizeTask(_ id: UUID, durationMinutes: Int) {
@@ -357,13 +548,15 @@ final class AppStore: ObservableObject {
     func addEvent(title: String, day: LocalDay) { commit { $0.events.append(CalendarEvent(title: title, day: day, startMinutes: 18 * 60, endMinutes: 19 * 60)) } }
     func addEvent(_ event: CalendarEvent) { commit { $0.events.append(event) }; selectedEventID = event.id }
     func updateEvent(_ event: CalendarEvent) { commit { value in if let i = value.events.firstIndex(where: { $0.id == event.id }) { value.events[i] = event } } }
-    func moveEvent(_ id: UUID, day: LocalDay, startMinutes: Int) {
-        commit { value in
-            guard let index = value.events.firstIndex(where: { $0.id == id }) else { return }
-            let duration = max(15, value.events[index].endMinutes - value.events[index].startMinutes)
+    @discardableResult func moveEvent(_ id: UUID, day: LocalDay, startMinutes: Int) -> Bool {
+        guard let index = data.events.firstIndex(where: { $0.id == id }) else { return false }
+        let event = data.events[index]
+        let duration = event.endMinutes - event.startMinutes
+        let start = min(1440 - duration, max(0, startMinutes))
+        return commit(actionName: "Move Event") { value in
             value.events[index].day = day
-            value.events[index].startMinutes = startMinutes
-            value.events[index].endMinutes = min(24 * 60 - 1, startMinutes + duration)
+            value.events[index].startMinutes = start
+            value.events[index].endMinutes = start + duration
         }
     }
     func duplicateEvent(_ id: UUID) { guard var event = data.events.first(where: { $0.id == id }) else { return }; event.id = UUID(); event.title += " Copy"; commit { $0.events.append(event) }; selectedEventID = event.id }
@@ -420,7 +613,7 @@ final class AppStore: ObservableObject {
     private func saveDevicePreferences() {
         guard let preferences = devicePreferences else { return }
         do {
-            let encoder = JSONEncoder(); encoder.dateEncodingStrategy = .iso8601; encoder.outputFormatting = [.sortedKeys]
+            let encoder = LifeBoardJSON.encoder(); encoder.outputFormatting = [.sortedKeys]
             let bytes = try encoder.encode(preferences)
             let url = repository.fileURL.deletingLastPathComponent().appendingPathComponent("DevicePreferences.json")
             if (try? Data(contentsOf: url)) != bytes { try LifeBoardPrivateFiles.write(bytes, to: url) }
@@ -445,12 +638,21 @@ final class AppStore: ObservableObject {
         await refreshGoogleCalendar()
     }
 
-    func refreshGoogleCalendar() async {
+    func refreshSelectedCalendarsNow() async -> String {
+        guard !data.settings.selectedExternalCalendarIDs.isEmpty else {
+            return "No calendars are selected. Choose calendars in Settings › Integrations."
+        }
+        await refreshGoogleCalendar(pullFromAccounts: true)
+        return calendarConnectionStatus
+    }
+
+    func refreshGoogleCalendar(pullFromAccounts: Bool = false) async {
         lastCalendarAttempt = .now
         guard calendarIntegration.hasFullAccess else {
             calendarConnectionStatus = calendarIntegration.accessGuidance
             return
         }
+        if pullFromAccounts { calendarIntegration.refreshAccountSources() }
         calendarIntegration.refreshLocalStore()
         externalCalendars = calendarIntegration.availableCalendars()
         let selected = data.settings.selectedExternalCalendarIDs
@@ -532,7 +734,7 @@ final class AppStore: ObservableObject {
     }
 
     func handle(url: URL) {
-        guard url.scheme == "lifeboard" else { return }
+        guard url.scheme == LifeBoardEnvironment.urlScheme else { return }
         let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
         if url.host == "task", url.path == "/create" {
             if let json = items.first(where: { $0.name == "payload" })?.value { previewExternalImport(json, source: "External LifeBoard link") }
@@ -542,8 +744,16 @@ final class AppStore: ObservableObject {
             previewExternalImport(json, source: "External batch import link")
         } else if url.host == "todo" {
             requestedSectionRaw = "inbox"
+        } else if let host = url.host, let section = ["today": "today", "upcoming": "inbox", "subjects": "subjects", "projects": "projects", "dates": "year", "completed": "completed"][host], url.path.isEmpty || url.path == "/" {
+            // Plain section links, for Shortcuts, Raycast and the widget.
+            requestedSectionRaw = section
         } else if url.host == "calendar" {
             requestedSectionRaw = "calendar"
+            if let view = items.first(where: { $0.name == "view" })?.value, ["day", "week", "month", "today"].contains(view) {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                    NotificationCenter.default.post(name: Notification.Name("LifeBoardCalendarCommand"), object: view)
+                }
+            }
         } else if url.host == "focus", url.path.isEmpty || url.path == "/" {
             requestedSectionRaw = "focus"
         } else if url.host == "task", let id = UUID(uuidString: url.path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))) {
@@ -578,7 +788,7 @@ final class AppStore: ObservableObject {
             persistenceReadOnly = false; fileModificationDate = Self.modificationDate(for: repository.fileURL)
             undoManager?.removeAllActions(); reconcileSelections()
             if ProcessInfo.processInfo.environment["LIFEBOARD_DATA_PATH"] == nil { _ = try? LifeBoardSharedStore.writeSnapshot(data) }
-            WidgetCenter.shared.reloadTimelines(ofKind: "LifeBoardAgendaWidget")
+            WidgetCenter.shared.reloadTimelines(ofKind: LifeBoardEnvironment.widgetKind)
             message = UserMessage(title: "Backup Restored", detail: "Your original workspace bytes were preserved in a private recovery copy before restore.")
         } catch { message = UserMessage(title: "Couldn't Restore", detail: "Nothing was replaced. " + error.localizedDescription) }
     }
@@ -616,7 +826,7 @@ final class AppStore: ObservableObject {
             reconcileSelections()
             persistenceReadOnly = false
             fileModificationDate = modified
-            if ProcessInfo.processInfo.environment["LIFEBOARD_DATA_PATH"] == nil { _ = try? LifeBoardSharedStore.writeSnapshot(data); WidgetCenter.shared.reloadTimelines(ofKind: "LifeBoardAgendaWidget") }
+            if ProcessInfo.processInfo.environment["LIFEBOARD_DATA_PATH"] == nil { _ = try? LifeBoardSharedStore.writeSnapshot(data); WidgetCenter.shared.reloadTimelines(ofKind: LifeBoardEnvironment.widgetKind) }
         } catch {
             persistenceReadOnly = true
             fileModificationDate = modified
@@ -652,6 +862,15 @@ final class AppStore: ObservableObject {
                 let latest = try await SyncService.fetch(from: endpoint, token: token)
                 guard !persistenceReadOnly, epoch == syncEpoch else { return }
                 let current = DevicePreferences.sharedProjection(data)
+                // Nothing changed on either side since the last acknowledged
+                // snapshot: skip the three full-document merge entirely.
+                if let rawRemote = latest.data, let baseline = SyncService.baseline(), latest.revision == baseline.revision {
+                    let acknowledged = DevicePreferences.sharedProjection(baseline.data)
+                    if DevicePreferences.sharedProjection(rawRemote) == acknowledged && current == acknowledged {
+                        syncStatus = "Synced just now"; lastSuccessfulSync = .now; syncConflicts = []; conflictContext = nil
+                        return
+                    }
+                }
                 let merged: LifeBoardData
                 if let rawRemote = latest.data {
                     let remote = DevicePreferences.sharedProjection(rawRemote)
@@ -814,7 +1033,7 @@ final class AppStore: ObservableObject {
     }
 
     private func sameSnapshot(_ lhs: LifeBoardData, _ rhs: LifeBoardData) -> Bool {
-        let encoder = JSONEncoder(); encoder.dateEncodingStrategy = .iso8601; encoder.outputFormatting = [.sortedKeys]
+        let encoder = LifeBoardJSON.encoder(); encoder.outputFormatting = [.sortedKeys]
         return (try? encoder.encode(lhs)) == (try? encoder.encode(rhs))
     }
 
@@ -826,5 +1045,31 @@ final class AppStore: ObservableObject {
 
     private static func modificationDate(for url: URL) -> Date? {
         (try? FileManager.default.attributesOfItem(atPath: url.path)[.modificationDate]) as? Date
+    }
+}
+
+// MARK: - Store actions shared by rows, menus and keyboard commands
+
+extension AppStore {
+    /// "When" is the planned day. A task that already has an exact time keeps
+    /// it on the new day; an untimed task stays untimed.
+    func setWhen(_ id: UUID, day: LocalDay?) {
+        guard let task = data.tasks.first(where: { $0.id == id }) else { return }
+        guard let day else { moveToInbox(id); return }
+        if task.scheduledStartMinutes != nil, !task.isCompleted { moveScheduledTask(id, day: day) }
+        else { unscheduleTime(id, day: day) }
+    }
+
+    func weekendDay(from today: LocalDay = .today) -> LocalDay {
+        let weekday = Calendar.current.component(.weekday, from: today.date()) // 1 = Sunday, 7 = Saturday
+        if weekday == 1 || weekday == 7 { return today }
+        return today.adding(days: 7 - weekday)
+    }
+
+    func nextWeekDay(from today: LocalDay = .today) -> LocalDay {
+        let weekday = Calendar.current.component(.weekday, from: today.date())
+        let start = data.settings.weekStartsMonday ? 2 : 1
+        let delta = (start - weekday + 7) % 7
+        return today.adding(days: delta == 0 ? 7 : delta)
     }
 }

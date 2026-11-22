@@ -1,5 +1,7 @@
-export const primaryViews = ['today','todo','capture','calendar','more'];
-export const childViews = ['dates','projects','subjects','focus','search','backups','settings','about','completed','trash','sync-centre','context','revision'];
+// Tabs: Today, To Do, Calendar and Browse, with Search apart. Every other view
+// is reached from Browse (or a link) and shows a Browse back button.
+export const primaryViews = ['today','todo','calendar','more','search'];
+export const childViews = ['capture','dates','projects','subjects','focus','backups','settings','about','completed','trash','sync-centre','context','revision'];
 export const moreActive = view => !primaryViews.includes(view) || view === 'more';
 export function readRoute(hash) {
   const values = new URLSearchParams(String(hash).replace(/^#/,''));
