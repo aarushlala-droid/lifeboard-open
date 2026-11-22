@@ -406,6 +406,7 @@ struct SettingsView: View {
     @EnvironmentObject private var store: AppStore
     @State private var settings = AppSettings()
     @State private var revealPairing = false
+    @AppStorage("showMenuBarItem") private var showMenuBarItem = true
     @State private var showTrash = false
     @State private var showConflicts = false
     @State private var backupSummary: AppStore.BackupSummary?
@@ -422,6 +423,7 @@ struct SettingsView: View {
             Form {
                 Stepper("Default task duration: \(settings.defaultTaskMinutes) minutes", value: $settings.defaultTaskMinutes, in: 5...180, step: 5)
                 Toggle("Week starts Monday", isOn: $settings.weekStartsMonday)
+                Toggle("Show LifeBoard in the menu bar", isOn: $showMenuBarItem)
                 Picker("Academic year starts", selection: $settings.academicYearStartMonth) { ForEach(1...12, id: \.self) { month in Text(Calendar.current.monthSymbols[month - 1]).tag(month) } }
             }.tabItem { Label("General", systemImage: "gear") }
             Form {

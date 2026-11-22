@@ -19,6 +19,7 @@ struct LifeBoardApp: App {
     @AppStorage("selectedSection") private var selectedRaw = AppSection.today.rawValue
     @AppStorage("showInspector") private var showInspector = true
     @State private var showCapture = false
+    @AppStorage("showMenuBarItem") private var showMenuBarItem = true
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some Scene {
@@ -44,6 +45,13 @@ struct LifeBoardApp: App {
         Settings {
             SettingsView().environmentObject(store).tint(LB.accent).frame(width: 660, height: 560)
         }
+
+        MenuBarExtra(isInserted: $showMenuBarItem) {
+            MenuBarPanel(showCapture: $showCapture).environmentObject(store)
+        } label: {
+            MenuBarLabel(store: store)
+        }
+        .menuBarExtraStyle(.window)
 
         Window("\(LifeBoardEnvironment.productName) Help", id: "help") {
             HelpView().environmentObject(store).tint(LB.accent).frame(minWidth: 560, minHeight: 520)
